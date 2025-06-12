@@ -1,147 +1,195 @@
+"""
+Command-line interface for RAG application creation.
+"""
+
 import questionary
 import typer
-from typing import Optional
-import json
 from pathlib import Path
+import logging
+from typing import Dict, Any
+from rich.console import Console
+from rich.panel import Panel
+from rich import print as rprint
 
-# Define options for different components
+from main import create_rag_app
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize rich console
+console = Console()
+
+# Component options
 VECTOR_DBS = {
-    "Chroma": {"description": "Open-source embedding database, great for getting started", "supports_docker": True},
-    "Weaviate": {"description": "Production-ready vector database with rich features", "supports_docker": True},
-    "Pinecone": {"description": "Managed vector database service, scalable", "supports_docker": False},
-    "Milvus": {"description": "Open-source vector database, highly scalable", "supports_docker": True}
+    "Chroma": {
+        "description": "Open-source embedding database, great for getting started",
+        "supports_local": True,
+        "supports_cloud": True
+    },
+    "Pinecone": {
+        "description": "Managed vector database service, scalable",
+        "supports_local": False,
+        "supports_cloud": True
+    }
 }
 
-CLOUD_LLM_PROVIDERS = {
-    "OpenAI": {"description": "GPT-3.5/4 - Powerful, reliable, cost-effective"},
-    "LLama": {"description": "Fast Inference Cloud APIs"},
-    "HuggingFace": {"description": "Open Source Models"},
-    "Mistral": {"description": "Open Source Models"}
-}
-
-LOCAL_LLM_PROVIDERS = {
-    "Local API": {"description": "Your own locally deployed LLM API", "endpoint_default": "http://localhost:8000"}
+LLM_PROVIDERS = {
+    "cloud": {
+        "OpenAI": {
+            "description": "GPT-3.5/4 - Production ready",
+            "endpoint": None
+        },
+        "HuggingFace": {
+            "description": "Cloud-hosted open source models",
+            "endpoint": "https://api-inference.huggingface.co"
+        }
+    },
+    "local": {
+        "Local Endpoint": {
+            "description": "Your own locally deployed LLM API",
+            "endpoint": "http://localhost:8000"
+        }
+    }
 }
 
 EMBEDDING_MODELS = {
-    "OpenAI Ada 002": {"description": "Strong performance, widely used", "supports_docker": False},
-    "BAAI/bge-large-en": {"description": "Top performing open source model", "supports_docker": True},
-    "Instructor-XL": {"description": "Task-specific embeddings, open source", "supports_docker": True},
-    "all-MiniLM-L6-v2": {"description": "Fast, lightweight, good performance", "supports_docker": True}
+    "Jina": {
+        "description": "Top performing open source model",
+        "supports_local": True,
+        "supports_cloud": True
+    },
+    "all-MiniLM-L6-v2": {
+        "description": "Fast, lightweight, good performance",
+        "supports_local": True,
+        "supports_cloud": False
+    }
 }
 
 CHUNKING_STRATEGIES = {
     "Fixed size": {"description": "Split by character count"},
-    "Paragraph": {"description": "Split by paragraphs"},
-    "Semantic": {"description": "Split by semantic meaning"},
-    "Hybrid": {"description": "Combine multiple strategies"}
+    "Semantic": {"description": "Split by semantic meaning"}
 }
 
 RETRIEVAL_METHODS = {
     "Basic Vector Search": {"description": "Simple similarity search"},
-    "Hybrid Search": {"description": "Combined vector + keyword search"},
-    "Re-ranking": {"description": "Two-stage retrieval with cross-encoder"},
-    "Multi-query": {"description": "Generate multiple queries for better recall"}
+    "Hybrid Search": {"description": "Combined vector + keyword search"}
 }
 
 def format_choices(options: dict) -> list[str]:
-    """Format choices with descriptions for questionary"""
+    """Format choices with descriptions for questionary."""
     return [f"{k} - {v['description']}" for k, v in options.items()]
 
 def extract_choice(answer: str) -> str:
-    """Extract the main choice from the formatted string"""
+    """Extract the main choice from the formatted string."""
     return answer.split(" - ")[0]
 
-def get_deployment_preference(component: str, selected_option: str, options_dict: dict) -> str:
-    """Get deployment preference for a component if it supports both cloud and docker"""
-    if not options_dict[selected_option]["supports_docker"]:
+def get_deployment_preference(component_name: str, selected_option: str, options_dict: dict) -> str:
+    """Get deployment preference for a component."""
+    component_info = options_dict[selected_option]
+    
+    # If component only supports one deployment type, return that
+    if component_info["supports_local"] and not component_info["supports_cloud"]:
+        return "local"
+    elif component_info["supports_cloud"] and not component_info["supports_local"]:
         return "cloud"
     
-    return questionary.select(
-        f"How would you like to deploy the {component}?",
+    # If component supports both, ask user preference
+    deployment = questionary.select(
+        f"\nHow would you like to use the {component_name} ({selected_option})?",
         choices=[
-            "Docker - Run locally in containers",
+            "Local - Run in dockerized containers on your machine",
             "Cloud API - Use managed service"
         ]
-    ).ask().split(" - ")[0]
+    ).ask()
+    
+    return "local" if "Local" in deployment else "cloud"
 
-def get_llm_configuration():
-    """Get LLM configuration based on deployment type"""
-    # First ask if using cloud or local LLM
-    deployment_type = questionary.select(
-        "Are you using a cloud LLM provider or a locally deployed LLM?",
+def get_llm_config() -> Dict[str, Any]:
+    """Get LLM configuration based on deployment preference."""
+    # First ask about deployment preference
+    deployment = questionary.select(
+        "How would you like to use your Language Model?",
         choices=[
-            "Cloud Provider - Use hosted LLM services (OpenAI, Anthropic, etc.)",
-            "Local Deployment - Connect to your own deployed LLM API"
+            "Local - Use your own deployed LLM API",
+            "Cloud - Use hosted LLM services"
         ]
-    ).ask().split(" - ")[0]
-
-    if deployment_type == "Cloud Provider":
-        # Ask which cloud provider
-        provider = extract_choice(questionary.select(
-            "Select your cloud LLM provider:",
-            choices=format_choices(CLOUD_LLM_PROVIDERS)
-        ).ask())
-        
-        return {
-            "deployment": "cloud",
-            "provider": provider,
-            "requires_api_key": True
-        }
-    else:
-        # Get local LLM endpoint
+    ).ask()
+    
+    is_local = "Local" in deployment
+    
+    if is_local:
+        # For local deployment, ask for endpoint
         endpoint = questionary.text(
             "Enter your local LLM API endpoint:",
-            default="http://localhost:8000"
+            default=LLM_PROVIDERS["local"]["Local Endpoint"]["endpoint"]
         ).ask()
         
         return {
+            "provider": "Local Endpoint",
             "deployment": "local",
             "endpoint": endpoint,
             "requires_api_key": False
         }
+    else:
+        # For cloud deployment, ask which provider
+        provider = extract_choice(questionary.select(
+            "Select your cloud LLM provider:",
+            choices=format_choices(LLM_PROVIDERS["cloud"])
+        ).ask())
+        
+        return {
+            "provider": provider,
+            "deployment": "cloud",
+            "endpoint": LLM_PROVIDERS["cloud"][provider]["endpoint"],
+            "requires_api_key": True
+        }
 
-def create_app_config():
-    """Gather all configuration options from the user"""
+def collect_config() -> Dict[str, Any]:
+    """Collect configuration from user input."""
+    console.print("\n[bold cyan]create-rag-app[/bold cyan] - RAG Application Generator\n")
     
     # Project name
     project_name = questionary.text(
-        "What is your RAG application name?",
+        "Project name:",
         validate=lambda text: len(text) > 0,
         default="my-rag-app"
     ).ask()
 
+    console.print("\n[bold]Components Setup[/bold]")
+    
     # Vector DB
+    console.print("\n[bold cyan]Vector Database[/bold cyan]")
     vector_db = extract_choice(questionary.select(
-        "Select your vector database:",
-        choices=format_choices(VECTOR_DBS),
+        "Select vector database:",
+        choices=format_choices(VECTOR_DBS)
     ).ask())
     
-    # Vector DB deployment
     vector_db_deployment = get_deployment_preference("vector database", vector_db, VECTOR_DBS)
 
     # LLM Configuration
-    llm_config = get_llm_configuration()
+    console.print("\n[bold cyan]Language Model[/bold cyan]")
+    llm_config = get_llm_config()
 
     # Embedding Model
+    console.print("\n[bold cyan]Embedding Model[/bold cyan]")
     embedding_model = extract_choice(questionary.select(
-        "Select your embedding model:",
-        choices=format_choices(EMBEDDING_MODELS),
+        "Select embedding model:",
+        choices=format_choices(EMBEDDING_MODELS)
     ).ask())
     
-    # Embedding deployment
     embedding_deployment = get_deployment_preference("embedding model", embedding_model, EMBEDDING_MODELS)
 
-    # Chunking Strategy
+    # Processing Configuration
+    console.print("\n[bold cyan]Processing Configuration[/bold cyan]")
     chunking_strategy = extract_choice(questionary.select(
-        "Select your text chunking strategy:",
-        choices=format_choices(CHUNKING_STRATEGIES),
+        "Chunking strategy:",
+        choices=format_choices(CHUNKING_STRATEGIES)
     ).ask())
 
-    # Retrieval Method
     retrieval_method = extract_choice(questionary.select(
-        "Select your retrieval method:",
-        choices=format_choices(RETRIEVAL_METHODS),
+        "Retrieval method:",
+        choices=format_choices(RETRIEVAL_METHODS)
     ).ask())
 
     return {
@@ -160,37 +208,100 @@ def create_app_config():
     }
 
 def main():
-    """Main CLI entrypoint"""
-    print("🚀 Welcome to Create RAG App! Let's set up your project.")
-    print("Please answer a few questions to configure your RAG application.\n")
+    """Main CLI entrypoint."""
+    try:
+        console.print("\n[bold green]🚀 Welcome to create-rag-app![/bold green]")
+        console.print("A modern RAG application generator\n")
 
-    config = create_app_config()
-    
-    # Show summary
-    print("\n📋 Your RAG App Configuration:")
-    print(json.dumps(config, indent=2))
-    
-    # Confirm and proceed
-    if questionary.confirm("Would you like to proceed with this configuration?").ask():
-        print("\n⚙️ Creating your RAG application...")
-        # TODO: Add template generation logic here
-        print(f"✨ Successfully created {config['project_name']}!")
+        # Collect configuration
+        config = collect_config()
         
-        # Show next steps based on deployment choices
-        print("\n📝 Next steps:")
-        if config["llm"]["deployment"] == "local":
-            print(f"- Ensure your local LLM API is running at {config['llm']['endpoint']}")
+        # Show summary in a panel
+        console.print("\n") # Add extra space before panel
+        summary = [
+            "[bold]Component Deployments[/bold]",
+            f"• Vector DB: [cyan]{config['vector_db']['provider']}[/cyan] ({config['vector_db']['deployment']})",
+            f"• LLM: [cyan]{config['llm']['provider']}[/cyan] ({config['llm']['deployment']})",
+        ]
+        
+        if config['llm']['endpoint']:
+            summary.append(f"  └─ Endpoint: [dim]{config['llm']['endpoint']}[/dim]")
+            
+        summary.extend([
+            f"• Embedding: [cyan]{config['embedding']['model']}[/cyan] ({config['embedding']['deployment']})",
+            "",
+            "[bold]Processing[/bold]",
+            f"• Chunking: {config['chunking_strategy']}",
+            f"• Retrieval: {config['retrieval_method']}"
+        ])
+        
+        console.print(Panel(
+            "\n".join(summary),
+            title="[bold]Project Configuration[/bold]",
+            expand=False
+        ))
+        
+        # Confirm and proceed
+        if questionary.confirm("\nProceed with this configuration?").ask():
+            console.print("\n[bold]Creating your RAG application...[/bold]")
+            
+            # Generate project using main.py
+            output_dir = Path.cwd()
+            project_dir = create_rag_app(config, output_dir)
+            
+            console.print(f"\n[bold green]✨ Success![/bold green] Created {config['project_name']} at {project_dir}")
+            
+            # Show next steps in a panel
+            console.print("\n") # Add extra space before panel
+            next_steps = ["[bold]Next steps:[/bold]"]
+            
+            if config['llm']['deployment'] == 'local':
+                next_steps.extend([
+                    "",
+                    "[bold cyan]LLM Setup[/bold cyan]",
+                    f"• Ensure your LLM API is running at {config['llm']['endpoint']}"
+                ])
+            
+            # Add cloud API setup instructions
+            cloud_components = []
+            if config['vector_db']['deployment'] == 'cloud':
+                cloud_components.append(f"{config['vector_db']['provider']} (Vector DB)")
+            if config['llm']['deployment'] == 'cloud':
+                cloud_components.append(f"{config['llm']['provider']} (LLM)")
+            if config['embedding']['deployment'] == 'cloud':
+                cloud_components.append(f"{config['embedding']['model']} (Embedding)")
+            
+            if cloud_components:
+                next_steps.extend([
+                    "",
+                    "[bold cyan]API Keys[/bold cyan]"
+                ])
+                for component in cloud_components:
+                    next_steps.append(f"• Set up {component} API key in [dim].env[/dim]")
+            
+            # Docker setup
+            next_steps.extend([
+                "",
+                "[bold cyan]Docker[/bold cyan]",
+                "• Make sure Docker and docker-compose are installed",
+                "• Run [bold]docker-compose up[/bold] to start the application"
+            ])
+            
+            console.print(Panel(
+                "\n".join(next_steps),
+                title="[bold]Getting Started[/bold]",
+                expand=False
+            ))
+            
+            console.print("\nNeed help? Check out the [bold cyan]README.md[/bold cyan] for detailed instructions.")
+            
         else:
-            print(f"- Set up your {config['llm']['provider']} API key in the .env file")
-        
-        if "Docker" in [config["vector_db"]["deployment"], config["embedding"]["deployment"]]:
-            print("- Make sure Docker is installed and running")
-            print("- Run `docker-compose up` to start the services")
-        
-        if "Cloud" in [config["vector_db"]["deployment"], config["embedding"]["deployment"]]:
-            print("- Set up your cloud API keys in the .env file")
-    else:
-        print("\n🔄 Feel free to run the command again to create a different configuration.")
+            console.print("\n[dim]Operation cancelled. Run the command again to create a different configuration.[/dim]")
+            
+    except Exception as e:
+        logger.error(f"Error creating RAG application: {str(e)}")
+        console.print(f"\n[bold red]Error:[/bold red] {str(e)}")
+        raise
 
 if __name__ == "__main__":
     typer.run(main)

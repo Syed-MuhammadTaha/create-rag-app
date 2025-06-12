@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Editor swap/backup files
+*~
+~$*
+*.swp
+*.swo
+*.bak
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Environment and configuration
+.env
+.env.*
+*.env
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs and outputs
+logs/
+outputs/
+*.log
+
+# Local databases and caches
+mongo-data/
+cache/
+*.sqlite3
+*.db
+
+# Excel files
+*.xlsx
+~$*.xlsx
+
+# VSCode settings
+.vscode/
+
+# PyCharm
+.idea/
+
+# Packaging
+*.egg
+*.egg-info/
+dist/
+build/
+
+qdrant_data/
