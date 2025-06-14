@@ -30,11 +30,13 @@ class RAGAppGenerator:
         template = self.env.get_template(template_path)
         return template.render(**context)
     
-    def _load_component(self, component_type: str, choice: str) -> str:
+    def _load_component(self, component_type: str, choice: str, config: Dict[str, Any]) -> str:
         """Load a specific component template."""
-        template_path = f"components/{component_type}/{choice.lower()}.j2"
+        # Convert the choice to lowercase and replace hyphens with underscores
+        normalized_choice = choice.lower().replace('-', '_')
+        template_path = f"components/{component_type}/{normalized_choice}.j2"
         try:
-            return self.env.get_template(template_path).render()
+            return self.env.get_template(template_path).render(**config)
         except Exception as e:
             logger.error(f"Error loading component {template_path}: {str(e)}")
             raise
@@ -51,11 +53,11 @@ class RAGAppGenerator:
         
         # Load selected components
         components = {
-            'vectorstore': self._load_component('vectorstore', config['vector_db']['provider']),
-            'llm': self._load_component('llm', config['llm']['provider']),
-            'embedding': self._load_component('embedding', config['embedding']['model'].split('/')[0]),
-            'chunking': self._load_component('chunking', config['chunking_strategy'].lower().replace(' ', '_')),
-            'retrieval': self._load_component('retrieval', config['retrieval_method'].lower().replace(' ', '_'))
+            'vectorstore': self._load_component('vectorstore', config['vector_db']['provider'], config),
+            'llm': self._load_component('llm', config['llm']['model'].lower(), config),
+            'embedding': self._load_component('embedding', config['embedding']['model'], config),
+            'chunking': self._load_component('chunking', config['chunking_strategy'].lower().replace(' ', '_'), config),
+            'retrieval': self._load_component('retrieval', config['retrieval_method'].lower().replace(' ', '_'), config)
         }
         
         # Update config with component implementations
@@ -67,12 +69,14 @@ class RAGAppGenerator:
             'src/rag_pipeline.py': 'base/src/rag_pipeline.py.j2',
             'src/generator.py': 'base/src/generator.py.j2',
             'src/vectorstore.py': 'base/src/vectorstore.py.j2',
-            # 'src/utils/embedder.py': 'base/src/utils/embedder.py.j2',
+            'src/utils/embedder.py': 'base/src/utils/embedder.py.j2',
+            
             # 'src/utils/loader.py': 'base/src/utils/loader.py.j2',
             # 'src/utils/pydantic.py': 'base/src/utils/pydantic.py.j2',
             'app.py': 'base/app.py.j2',
             'frontend.py': 'base/frontend.py.j2',
             'requirements.txt': 'base/requirements.txt.j2',
+            'docker-compose.yml': 'base/docker-compose.yml.j2',
             '.env': 'base/env.j2'
         }
         

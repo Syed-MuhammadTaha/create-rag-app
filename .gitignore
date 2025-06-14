@@ -50,4 +50,4 @@ cache/
 dist/
 build/
 
-qdrant_data/
+my-rag-app/

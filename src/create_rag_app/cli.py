@@ -34,22 +34,21 @@ VECTOR_DBS = {
     }
 }
 
-LLM_PROVIDERS = {
-    "cloud": {
-        "OpenAI": {
-            "description": "GPT-3.5/4 - Production ready",
-            "endpoint": None
-        },
-        "HuggingFace": {
-            "description": "Cloud-hosted open source models",
-            "endpoint": "https://api-inference.huggingface.co"
-        }
+LLM_OPTIONS = {
+    "OpenAI": {
+        "description": "GPT-3.5/4 - Production ready",
+        "type": "cloud",
+        "requires_api_key": True
     },
-    "local": {
-        "Local Endpoint": {
-            "description": "Your own locally deployed LLM API",
-            "endpoint": "http://localhost:8000"
-        }
+    "HuggingFace": {
+        "description": "Cloud-hosted open source models",
+        "type": "cloud",
+        "requires_api_key": True
+    },
+    "Local": {
+        "description": "Your own locally deployed LLM API",
+        "type": "local",
+        "requires_api_key": False
     }
 }
 
@@ -106,73 +105,36 @@ def get_deployment_preference(component_name: str, selected_option: str, options
     return "local" if "Local" in deployment else "cloud"
 
 def get_llm_config() -> Dict[str, Any]:
-    """Get LLM configuration based on deployment preference."""
-    # First ask about deployment preference
-    deployment = questionary.select(
-        "How would you like to use your Language Model?",
-        choices=[
-            "Local - Use your own deployed LLM API",
-            "Cloud - Use hosted LLM services"
-        ]
-    ).ask()
+    """Get LLM configuration."""
+    # Ask which LLM to use
+    llm_choice = extract_choice(questionary.select(
+        "Select your Language Model:",
+        choices=format_choices(LLM_OPTIONS)
+    ).ask())
     
-    is_local = "Local" in deployment
-    
-    if is_local:
-        # For local deployment, ask for endpoint
-        endpoint = questionary.text(
-            "Enter your local LLM API endpoint:",
-            default=LLM_PROVIDERS["local"]["Local Endpoint"]["endpoint"]
-        ).ask()
-        
-        return {
-            "provider": "Local Endpoint",
-            "deployment": "local",
-            "endpoint": endpoint,
-            "requires_api_key": False
-        }
-    else:
-        # For cloud deployment, ask which provider
-        provider = extract_choice(questionary.select(
-            "Select your cloud LLM provider:",
-            choices=format_choices(LLM_PROVIDERS["cloud"])
-        ).ask())
-        
-        return {
-            "provider": provider,
-            "deployment": "cloud",
-            "endpoint": LLM_PROVIDERS["cloud"][provider]["endpoint"],
-            "requires_api_key": True
-        }
+    llm_info = LLM_OPTIONS[llm_choice]
+    return {
+        "model": llm_choice,
+        "type": llm_info["type"],
+        "requires_api_key": llm_info["requires_api_key"]
+    }
 
 def collect_config() -> Dict[str, Any]:
     """Collect configuration from user input."""
-    console.print("\n[bold cyan]create-rag-app[/bold cyan] - RAG Application Generator\n")
     
     # Project name
+    console.print("[bold yellow]PROJECT SETUP[/bold yellow] 📝")
     project_name = questionary.text(
         "Project name:",
         validate=lambda text: len(text) > 0,
         default="my-rag-app"
     ).ask()
 
-    console.print("\n[bold]Components Setup[/bold]")
+    console.print("\n[bold green]COMPONENTS SETUP[/bold green] 🛠️\n")
     
-    # Vector DB
-    console.print("\n[bold cyan]Vector Database[/bold cyan]")
-    vector_db = extract_choice(questionary.select(
-        "Select vector database:",
-        choices=format_choices(VECTOR_DBS)
-    ).ask())
-    
-    vector_db_deployment = get_deployment_preference("vector database", vector_db, VECTOR_DBS)
-
-    # LLM Configuration
-    console.print("\n[bold cyan]Language Model[/bold cyan]")
-    llm_config = get_llm_config()
-
-    # Embedding Model
-    console.print("\n[bold cyan]Embedding Model[/bold cyan]")
+    # 1. Embedding Model (First because it's fundamental to RAG)
+    console.print("[bold blue]1. Embedding Model[/bold blue] 🧬")
+    console.print("[dim]Choose how to convert text to vectors[/dim]")
     embedding_model = extract_choice(questionary.select(
         "Select embedding model:",
         choices=format_choices(EMBEDDING_MODELS)
@@ -180,38 +142,57 @@ def collect_config() -> Dict[str, Any]:
     
     embedding_deployment = get_deployment_preference("embedding model", embedding_model, EMBEDDING_MODELS)
 
-    # Processing Configuration
-    console.print("\n[bold cyan]Processing Configuration[/bold cyan]")
+    # 2. Vector DB (Second because it stores the embeddings)
+    console.print("\n[bold purple]2. Vector Database[/bold purple] 🗄️")
+    console.print("[dim]Select where to store your vectors[/dim]")
+    vector_db = extract_choice(questionary.select(
+        "Select vector database:",
+        choices=format_choices(VECTOR_DBS)
+    ).ask())
+    
+    vector_db_deployment = get_deployment_preference("vector database", vector_db, VECTOR_DBS)
+
+    # 3. Processing Configuration (Third because it affects how documents are processed)
+    console.print("\n[bold orange1]3. Document Processing[/bold orange1] 📄")
+    console.print("[dim]Configure how your documents are split[/dim]")
     chunking_strategy = extract_choice(questionary.select(
-        "Chunking strategy:",
+        "How should documents be split into chunks?",
         choices=format_choices(CHUNKING_STRATEGIES)
     ).ask())
 
+    # 4. Retrieval Method (Fourth because it depends on chunking and affects how documents are retrieved)
+    console.print("\n[bold red]4. Retrieval Strategy[/bold red] 🔍")
+    console.print("[dim]Define how to find relevant information[/dim]")
     retrieval_method = extract_choice(questionary.select(
-        "Retrieval method:",
+        "How should relevant chunks be retrieved?",
         choices=format_choices(RETRIEVAL_METHODS)
     ).ask())
 
+    # 5. LLM Configuration (Last because it's the final step in the RAG pipeline)
+    console.print("\n[bold green1]5. Language Model[/bold green1] 🤖")
+    console.print("[dim]Choose your AI model for generating responses[/dim]")
+    llm_config = get_llm_config()
+
     return {
         "project_name": project_name,
-        "vector_db": {
-            "provider": vector_db,
-            "deployment": vector_db_deployment
-        },
-        "llm": llm_config,
         "embedding": {
             "model": embedding_model,
             "deployment": embedding_deployment
         },
+        "vector_db": {
+            "provider": vector_db,
+            "deployment": vector_db_deployment
+        },
         "chunking_strategy": chunking_strategy,
-        "retrieval_method": retrieval_method
+        "retrieval_method": retrieval_method,
+        "llm": llm_config
     }
 
 def main():
     """Main CLI entrypoint."""
     try:
-        console.print("\n[bold green]🚀 Welcome to create-rag-app![/bold green]")
-        console.print("A modern RAG application generator\n")
+        console.print("\n[bold magenta]create-rag-app[/bold magenta] 🚀")
+        console.print("[dim italic]A modern RAG application generator[/dim italic]\n")
 
         # Collect configuration
         config = collect_config()
@@ -219,21 +200,26 @@ def main():
         # Show summary in a panel
         console.print("\n") # Add extra space before panel
         summary = [
-            "[bold]Component Deployments[/bold]",
-            f"• Vector DB: [cyan]{config['vector_db']['provider']}[/cyan] ({config['vector_db']['deployment']})",
-            f"• LLM: [cyan]{config['llm']['provider']}[/cyan] ({config['llm']['deployment']})",
-        ]
-        
-        if config['llm']['endpoint']:
-            summary.append(f"  └─ Endpoint: [dim]{config['llm']['endpoint']}[/dim]")
-            
-        summary.extend([
-            f"• Embedding: [cyan]{config['embedding']['model']}[/cyan] ({config['embedding']['deployment']})",
+            "[bold green]✨ Your RAG App Configuration[/bold green]",
             "",
-            "[bold]Processing[/bold]",
-            f"• Chunking: {config['chunking_strategy']}",
-            f"• Retrieval: {config['retrieval_method']}"
-        ])
+            "[bold blue]Embedding[/bold blue] 🧬",
+            f"• Model: [cyan]{config['embedding']['model']}[/cyan]",
+            f"• Deployment: [cyan]{config['embedding']['deployment']}[/cyan]",
+            "",
+            "[bold purple]Vector Database[/bold purple] 🗄️",
+            f"• Provider: [cyan]{config['vector_db']['provider']}[/cyan]",
+            f"• Deployment: [cyan]{config['vector_db']['deployment']}[/cyan]",
+            "",
+            "[bold orange1]Processing[/bold orange1] 📄",
+            f"• Chunking: [cyan]{config['chunking_strategy']}[/cyan]",
+            "",
+            "[bold red]Retrieval[/bold red] 🔍",
+            f"• Method: [cyan]{config['retrieval_method']}[/cyan]",
+            "",
+            "[bold green1]Language Model[/bold green1] 🤖",
+            f"• Provider: [cyan]{config['llm']['model']}[/cyan]",
+            f"• Type: [cyan]{config['llm']['type']}[/cyan]"
+        ]
         
         console.print(Panel(
             "\n".join(summary),
@@ -255,19 +241,19 @@ def main():
             console.print("\n") # Add extra space before panel
             next_steps = ["[bold]Next steps:[/bold]"]
             
-            if config['llm']['deployment'] == 'local':
+            if config['llm']['type'] == 'local':
                 next_steps.extend([
                     "",
                     "[bold cyan]LLM Setup[/bold cyan]",
-                    f"• Ensure your LLM API is running at {config['llm']['endpoint']}"
+                    "• Configure your local LLM API endpoint in [dim].env[/dim]"
                 ])
             
             # Add cloud API setup instructions
             cloud_components = []
             if config['vector_db']['deployment'] == 'cloud':
                 cloud_components.append(f"{config['vector_db']['provider']} (Vector DB)")
-            if config['llm']['deployment'] == 'cloud':
-                cloud_components.append(f"{config['llm']['provider']} (LLM)")
+            if config['llm']['type'] == 'cloud':
+                cloud_components.append(f"{config['llm']['model']} (LLM)")
             if config['embedding']['deployment'] == 'cloud':
                 cloud_components.append(f"{config['embedding']['model']} (Embedding)")
             

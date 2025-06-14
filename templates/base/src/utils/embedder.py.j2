@@ -1,0 +1,36 @@
+from src.config import Config
+from typing import List
+from langchain_core.embeddings import Embeddings
+from pydantic import BaseModel
+import requests
+
+class Embedder(BaseModel, Embeddings):
+    """
+    A class to generate text embeddings using {{ embedding.model }}.
+    """
+
+    @classmethod
+    def embed_query(cls, text: str) -> List[float]:
+        """
+        Generates an embedding for a single query text.
+        """
+        data = {"input": [text]}
+{% if embedding.model == "all-MiniLM-L6-v2" %}
+{% include "components/embedding/all_minilm_l6_v2.j2" %}
+{% elif embedding.model == "Jina" %}
+{% include "components/embedding/jina.j2" %}
+{% endif %}
+        return result[0]
+
+    @classmethod
+    def embed_documents(cls, texts: List[str]) -> List[List[float]]:
+        """
+        Generates embeddings for multiple documents.
+        """
+        data = {"input": texts}
+{% if embedding.model == "all-MiniLM-L6-v2" %}
+{% include "components/embedding/all_minilm_l6_v2.j2" %}
+{% elif embedding.model == "Jina" %}
+{% include "components/embedding/jina.j2" %}
+{% endif %}
+        return result

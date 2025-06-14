@@ -1,0 +1,77 @@
+from qdrant_client import QdrantClient, models
+from langchain_qdrant import QdrantVectorStore
+from src.utils.embedder import Embedder
+from src.config import Config
+from pydantic import BaseModel, Field
+
+class VectorStoreConfig(BaseModel):
+    qdrant_url: str = Field(default=Config.QDRANT_URL, description="URL for Qdrant server")
+    collection_name: str = Field(default=Config.COLLECTION_NAME, description="Name of the collection in Qdrant")
+
+class VectorStore:
+    def __init__(self, config: VectorStoreConfig = VectorStoreConfig()):
+        """
+        Initialize the vector store with Qdrant client and create collection if it doesn't exist.
+        """
+        self.embeddings = Embedder()
+        self.client = QdrantClient(url=config.qdrant_url)
+        self.collection_name = config.collection_name
+
+        # Test connection
+        self.test_connection()
+
+        # Create collection if it doesn't exist
+        self.initialize_collection()
+
+        # Initialize the vector store interface
+        self.vector_store = QdrantVectorStore(
+            client=self.client,
+            collection_name=self.collection_name,
+            embedding=self.embeddings
+        )
+
+    def test_connection(self) -> None:
+        """
+        Test whether a connection to the Qdrant server can be established.
+        """
+        try:
+            self.client.get_collections()
+            print("✅ Successfully connected to Qdrant ")
+        except Exception as e:
+            print("❌ Failed to connect to Qdrant:", str(e))
+            raise
+
+    def initialize_collection(self) -> None:
+        """
+        Initialize the collection with proper configuration.
+        """
+        try:
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=models.VectorParams(
+                    size=384,
+                    distance=models.Distance.COSINE
+                ),
+                quantization_config=models.ScalarQuantization(
+                    scalar=models.ScalarQuantizationConfig(
+                        type=models.ScalarType.INT8,
+                        always_ram=True,
+                    ),
+                ),
+            )
+            print(f"Collection '{self.collection_name}' created successfully!")
+
+            self.client.update_collection(
+                collection_name=self.collection_name,
+                hnsw_config=models.HnswConfigDiff(
+                    m=64,
+                    ef_construct=5000,
+                    max_indexing_threads=8,
+                    on_disk=True,
+                )
+            )
+        except Exception as e:
+            if "already exists" in str(e):
+                print(f"Collection '{self.collection_name}' already exists.")
+            else:
+                raise
