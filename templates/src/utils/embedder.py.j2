@@ -15,11 +15,7 @@ class Embedder(BaseModel, Embeddings):
         Generates an embedding for a single query text.
         """
         data = {"input": [text]}
-{% if embedding.model == "all-MiniLM-L6-v2" %}
-{% include "components/embedding/all_minilm_l6_v2.j2" %}
-{% elif embedding.model == "Jina" %}
-{% include "components/embedding/jina.j2" %}
-{% endif %}
+        {{ embedding_component.get_code_logic() | indent(8) }}
         return result[0]
 
     @classmethod
@@ -28,9 +24,5 @@ class Embedder(BaseModel, Embeddings):
         Generates embeddings for multiple documents.
         """
         data = {"input": texts}
-{% if embedding.model == "all-MiniLM-L6-v2" %}
-{% include "components/embedding/all_minilm_l6_v2.j2" %}
-{% elif embedding.model == "Jina" %}
-{% include "components/embedding/jina.j2" %}
-{% endif %}
+        {{ embedding_component.get_code_logic() | indent(8) }}
         return result

@@ -7,7 +7,31 @@ from typing import Dict, Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import logging
 
+from create_rag_app.components.embedding.jina import JinaComponent
+from create_rag_app.components.embedding.all_minilm import AllMiniLMComponent
+
 logger = logging.getLogger(__name__)
+
+EMBEDDING_REGISTRY = {
+    "jina": JinaComponent,
+    "all_minilm_l6_v2": AllMiniLMComponent,
+}
+
+def generate_template_context(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Creates the full context for Jinja2 rendering, including component instances.
+    """
+    context = config.copy()
+
+    # Create embedding component instance
+    embedding_id = config["embedding"]["id"]
+    if embedding_id in EMBEDDING_REGISTRY:
+        EmbeddingClass = EMBEDDING_REGISTRY[embedding_id]
+        context["embedding_component"] = EmbeddingClass(config["embedding"])
+
+    # Add other component instantiation logic here...
+
+    return context
 
 class RAGAppGenerator:
     """Handles RAG application generation and module loading."""
@@ -30,17 +54,6 @@ class RAGAppGenerator:
         template = self.env.get_template(template_path)
         return template.render(**context)
     
-    def _load_component(self, component_type: str, choice: str, config: Dict[str, Any]) -> str:
-        """Load a specific component template."""
-        # Convert the choice to lowercase and replace hyphens with underscores
-        normalized_choice = choice.lower().replace('-', '_')
-        template_path = f"components/{component_type}/{normalized_choice}.j2"
-        try:
-            return self.env.get_template(template_path).render(**config)
-        except Exception as e:
-            logger.error(f"Error loading component {template_path}: {str(e)}")
-            raise
-    
     def generate_project(self, config: Dict[str, Any], output_dir: Path) -> Path:
         """Generate project from configuration."""
         # Create project directory
@@ -51,50 +64,40 @@ class RAGAppGenerator:
         src_dir = project_dir / "src"
         src_dir.mkdir(parents=True, exist_ok=True)
         
-        # Load selected components
-        components = {
-            'vectorstore': self._load_component('vectorstore', config['vector_db']['provider'], config),
-            'llm': self._load_component('llm', config['llm']['model'].lower(), config),
-            'embedding': self._load_component('embedding', config['embedding']['model'], config),
-            'chunking': self._load_component('chunking', config['chunking_strategy'].lower().replace(' ', '_'), config),
-            'retrieval': self._load_component('retrieval', config['retrieval_method'].lower().replace(' ', '_'), config)
-        }
-        
-        # Update config with component implementations
-        config['components'] = components
+        # Create the full template context, including component instances
+        context = generate_template_context(config)
         
         # Generate core files
         core_files = {
-            'src/config.py': 'base/src/config.py.j2',
-            'src/rag_pipeline.py': 'base/src/rag_pipeline.py.j2',
-            'src/generator.py': 'base/src/generator.py.j2',
-            'src/vectorstore.py': 'base/src/vectorstore.py.j2',
-            'src/utils/embedder.py': 'base/src/utils/embedder.py.j2',
+            # 'src/config.py': 'base/src/config.py.j2',
+            # 'src/rag_pipeline.py': 'base/src/rag_pipeline.py.j2',
+            # 'src/generator.py': 'base/src/generator.py.j2',
+            # 'src/vectorstore.py': 'base/src/vectorstore.py.j2',
+            'src/utils/embedder.py': 'src/utils/embedder.py.j2',
             
             # 'src/utils/loader.py': 'base/src/utils/loader.py.j2',
             # 'src/utils/pydantic.py': 'base/src/utils/pydantic.py.j2',
-            'app.py': 'base/app.py.j2',
-            'frontend.py': 'base/frontend.py.j2',
-            'requirements.txt': 'base/requirements.txt.j2',
-            'docker-compose.yml': 'base/docker-compose.yml.j2',
-            '.env': 'base/env.j2'
+            'app.py': 'app.py.j2',
+            'frontend.py': 'frontend.py.j2',
+            'requirements.txt': 'requirements.txt.j2',
+            'docker-compose.yml': 'docker-compose.yml.j2',
+            '.env': 'env.j2'
         }
         
         for output_path, template_path in core_files.items():
-            content = self._render_template(template_path, config)
+            content = self._render_template(template_path, context)
             file_path = project_dir / output_path
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content)
         
         # Generate Docker files (always needed for frontend/backend)
         docker_files = {
-            'Dockerfile.backend': 'base/Dockerfile.backend.j2',
-            'Dockerfile.frontend': 'base/Dockerfile.frontend.j2',
-            'docker-compose.yml': 'base/docker-compose.yml.j2'
+            'Dockerfile.backend': 'Dockerfile.backend.j2',
+            'Dockerfile.frontend': 'Dockerfile.frontend.j2',
         }
         
         for output_path, template_path in docker_files.items():
-            content = self._render_template(template_path, config)
+            content = self._render_template(template_path, context)
             file_path = project_dir / output_path
             file_path.write_text(content)
         

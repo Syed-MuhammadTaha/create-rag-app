@@ -1,0 +1,14 @@
+# Core dependencies
+fastapi
+uvicorn
+python-dotenv
+requests
+langchain
+langchain-community
+langchain-core
+langchain-openai
+
+# Component-specific dependencies
+{% for req in embedding_component.get_requirements() %}
+{{ req }}
+{% endfor %}

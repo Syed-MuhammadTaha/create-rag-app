@@ -2,16 +2,21 @@
 Command-line interface for RAG application creation.
 """
 
+import sys
+from pathlib import Path
+import os
 import questionary
 import typer
-from pathlib import Path
 import logging
 from typing import Dict, Any
 from rich.console import Console
 from rich.panel import Panel
-from rich import print as rprint
+from create_rag_app.main import create_rag_app
 
-from main import create_rag_app
+# This ensures the application can be run as a script
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -56,12 +61,14 @@ EMBEDDING_MODELS = {
     "Jina": {
         "description": "Top performing open source model",
         "supports_local": True,
-        "supports_cloud": True
+        "supports_cloud": True,
+        "id": "jina"
     },
     "all-MiniLM-L6-v2": {
         "description": "Fast, lightweight, good performance",
         "supports_local": True,
-        "supports_cloud": False
+        "supports_cloud": False,
+        "id": "all_minilm_l6_v2"
     }
 }
 
@@ -135,12 +142,12 @@ def collect_config() -> Dict[str, Any]:
     # 1. Embedding Model (First because it's fundamental to RAG)
     console.print("[bold blue]1. Embedding Model[/bold blue] 🧬")
     console.print("[dim]Choose how to convert text to vectors[/dim]")
-    embedding_model = extract_choice(questionary.select(
+    embedding_model_choice = extract_choice(questionary.select(
         "Select embedding model:",
         choices=format_choices(EMBEDDING_MODELS)
     ).ask())
     
-    embedding_deployment = get_deployment_preference("embedding model", embedding_model, EMBEDDING_MODELS)
+    embedding_deployment = get_deployment_preference("embedding model", embedding_model_choice, EMBEDDING_MODELS)
 
     # 2. Vector DB (Second because it stores the embeddings)
     console.print("\n[bold purple]2. Vector Database[/bold purple] 🗄️")
@@ -176,7 +183,8 @@ def collect_config() -> Dict[str, Any]:
     return {
         "project_name": project_name,
         "embedding": {
-            "model": embedding_model,
+            "model": embedding_model_choice,
+            "id": EMBEDDING_MODELS[embedding_model_choice]["id"],
             "deployment": embedding_deployment
         },
         "vector_db": {
