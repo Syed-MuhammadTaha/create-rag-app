@@ -1,0 +1,71 @@
+from typing import List, Dict, Any
+{% if vector_db.provider == "Qdrant" %}
+from qdrant_client import QdrantClient, models
+from langchain_qdrant import QdrantVectorStore
+{% elif vector_db.provider == "Pinecone" %}
+import pinecone
+from langchain_pinecone import PineconeVectorStore
+{% endif %}
+from src.utils.embedder import Embedder
+from src.config import Config
+from pydantic import BaseModel, Field
+
+class VectorStoreConfig(BaseModel):
+    qdrant_url: str = Field(default=Config.QDRANT_URL, description="URL for Qdrant server")
+    collection_name: str = Field(default=Config.COLLECTION_NAME, description="Name of the collection in Qdrant")
+
+class VectorStore:
+    def __init__(self, config: VectorStoreConfig = VectorStoreConfig()):
+        """
+        Initialize the vector store with the chosen provider and create collection if it doesn't exist.
+        """
+        self.embeddings = Embedder()
+        
+        {{ vectorstore_component.get_code_logic() }}
+        
+        # Initialize the collection/index
+        {{ vectorstore_component.get_collection_init_logic() }}
+        
+        # Initialize the vector store interface
+        {% if vector_db.provider == "Qdrant" %}
+        self.vector_store = QdrantVectorStore(
+            client=self.client,
+            collection_name=config.collection_name,
+            embeddings=self.embeddings
+        )
+        {% elif vector_db.provider == "Pinecone" %}
+        self.vector_store = PineconeVectorStore(
+            index=self.index,
+            embedding=self.embeddings,
+            namespace=config.namespace
+        )
+        {% endif %}
+
+    def add_texts(self, texts: List[str], metadatas: List[Dict[str, Any]] = None) -> List[str]:
+        """
+        Add texts to the vector store.
+        """
+        try:
+            ids = self.vector_store.add_texts(texts=texts, metadatas=metadatas)
+            return ids
+        except Exception as e:
+            print(f"Error adding texts to vector store: {e}")
+            return []
+
+    def similarity_search(self, query: str, k: int = 4) -> List[Dict[str, Any]]:
+        """
+        Search for similar documents in the vector store.
+        """
+        try:
+            results = self.vector_store.similarity_search_with_score(query, k=k)
+            return [
+                {
+                    "content": doc.page_content,
+                    "metadata": doc.metadata,
+                    "score": score
+                }
+                for doc, score in results
+            ]
+        except Exception as e:
+            print(f"Error searching vector store: {e}")
+            return []

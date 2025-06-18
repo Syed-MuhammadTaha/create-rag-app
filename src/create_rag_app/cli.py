@@ -27,7 +27,7 @@ console = Console()
 
 # Component options
 VECTOR_DBS = {
-    "Chroma": {
+    "Qdrant": {
         "description": "Open-source embedding database, great for getting started",
         "supports_local": True,
         "supports_cloud": True
@@ -61,14 +61,12 @@ EMBEDDING_MODELS = {
     "Jina": {
         "description": "Top performing open source model",
         "supports_local": True,
-        "supports_cloud": True,
-        "id": "jina"
+        "supports_cloud": True
     },
     "all-MiniLM-L6-v2": {
         "description": "Fast, lightweight, good performance",
         "supports_local": True,
-        "supports_cloud": False,
-        "id": "all_minilm_l6_v2"
+        "supports_cloud": False
     }
 }
 
@@ -89,6 +87,10 @@ def format_choices(options: dict) -> list[str]:
 def extract_choice(answer: str) -> str:
     """Extract the main choice from the formatted string."""
     return answer.split(" - ")[0]
+
+def generate_component_id(name: str) -> str:
+    """Generate a component ID from its name by converting to lowercase and replacing hyphens with underscores."""
+    return name.lower().replace("-", "_")
 
 def get_deployment_preference(component_name: str, selected_option: str, options_dict: dict) -> str:
     """Get deployment preference for a component."""
@@ -184,12 +186,13 @@ def collect_config() -> Dict[str, Any]:
         "project_name": project_name,
         "embedding": {
             "model": embedding_model_choice,
-            "id": EMBEDDING_MODELS[embedding_model_choice]["id"],
+            "id": generate_component_id(embedding_model_choice),
             "deployment": embedding_deployment
         },
         "vector_db": {
             "provider": vector_db,
-            "deployment": vector_db_deployment
+            "deployment": vector_db_deployment,
+            "id": generate_component_id(vector_db)
         },
         "chunking_strategy": chunking_strategy,
         "retrieval_method": retrieval_method,

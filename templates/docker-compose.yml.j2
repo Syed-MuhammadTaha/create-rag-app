@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -16,7 +14,9 @@ services:
       - ./qdrant_data:/qdrant/storage
     networks:
       - app-network
-
+  {% if embedding.deployment == "local" %}
+  {{ embedding_component.get_docker_service() }}
+  {% endif %}
   backend:
     build:
       context: .
@@ -24,19 +24,17 @@ services:
     container_name: backend-container
     ports:
       - "8000:8000"
-    volumes:
-      - ./src:/app/src
-    env_file:
-      - .env
     expose:
       - 8000
     networks:
       - app-network
     depends_on:
       - qdrant
-      {% if embedding.deployment == "local" %}- {{ embedding_component.service_name }}{% endif %}
+      {% if embedding.deployment == "local" %}
+      - {{ embedding_component.service_name }}
+      {% endif %}
     restart: always
-
+    entrypoint: ["sh", "-c", "until nc -z {{ embedding_component.service_name }} 8080; do sleep 2; done; uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4"]
   frontend:
     build:
       context: .
@@ -51,9 +49,6 @@ services:
     restart: always
     depends_on:
       - backend
-
-{{ embedding_component.get_docker_service() }}
-
 networks:
   app-network:
     driver: bridge

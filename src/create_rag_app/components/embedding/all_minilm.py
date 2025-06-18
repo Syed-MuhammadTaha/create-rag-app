@@ -9,18 +9,24 @@ class AllMiniLMComponent(EmbeddingComponent):
 
     def get_docker_service(self) -> str:
         return dedent(f"""
-          {self.service_name}:
-            build:
-              context: .
-              dockerfile: Dockerfile.minilm
+        {self.service_name}:
+            image: ghcr.io/clems4ever/torchserve-all-minilm-l6-v2:latest
             container_name: {self.service_name}
+            restart: always
             ports:
               - "8080:8080"
-            command: sh -c "torch-model-archiver --model-name all-MiniLM-L6-v2 --version 1.0 --handler ./embedding_handler.py --serialized-file ./model.pt --export-path /home/model-server/model-store && torchserve --start --model-store /home/model-server/model-store --models all-MiniLM-L6-v2=all-MiniLM-L6-v2.mar"
+            depends_on:
+              - qdrant
+            stdin_open: true
+            tty: true
+            networks:
+              - app-network
+            expose:
+              - 8080
         """).strip()
 
     def get_env_vars(self) -> list[str]:
-        return ['MINILM_EMBEDDING_URL="http://localhost:8080/predictions/all-MiniLM-L6-v2"']
+        return ['EMBEDDING_URL="http://localhost:8080/predictions/all-MiniLM-L6-v2"']
 
     def get_requirements(self) -> list[str]:
         return ["sentence-transformers"]
@@ -30,7 +36,7 @@ class AllMiniLMComponent(EmbeddingComponent):
             # all-MiniLM-L6-v2 local server
             try:
                 response = requests.post(
-                    Config.MINILM_EMBEDDING_URL,
+                    Config.EMBEDDING_URL,
                     json=data,
                     headers={"Content-Type": "application/json"}
                 )
@@ -39,4 +45,7 @@ class AllMiniLMComponent(EmbeddingComponent):
             except requests.exceptions.RequestException as e:
                 print(f"Error calling MiniLM embedding server: {e}")
                 result = []
-        """).strip() 
+        """).strip()
+
+    def get_vector_dimension(self) -> int:
+        return 384  # MiniLM's fixed dimension 

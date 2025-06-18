@@ -10,20 +10,22 @@ class JinaComponent(EmbeddingComponent):
     def get_docker_service(self) -> str:
         if self.deployment == "local":
             return dedent(f"""
-              {self.service_name}:
-                image: jinaai/jina-embeddings:0.10.0
+            {self.service_name}:
+                image: jinaai/jina-embeddings-v3:latest
                 container_name: {self.service_name}
                 ports:
-                  - "5656:5656"
+                  - "8080:8080"
                 environment:
                   - JINA_EMBEDDINGS_MODEL_NAME={self.config['model']}
+                networks:
+                  - app-network
             """).strip()
         return ""
 
     def get_env_vars(self) -> list[str]:
         if self.deployment == "cloud":
-            return ['JINA_API_KEY="your-jina-api-key"']
-        return ['JINA_EMBEDDING_URL="http://localhost:5656/embeddings"']
+            return ['JINA_API_KEY="your-jina-api-key"', 'EMBEDDING_URL="https://api.jina.ai/v1/embeddings"']
+        return ['EMBEDDING_URL="http://localhost:8080/v1/embeddings"']
 
     def get_requirements(self) -> list[str]:
         return []
@@ -38,7 +40,7 @@ class JinaComponent(EmbeddingComponent):
                 }
                 try:
                     response = requests.post(
-                        "https://api.jina.ai/v1/embeddings",
+                        Config.EMBEDDING_URL,
                         json=data,
                         headers=headers
                     )
@@ -52,7 +54,7 @@ class JinaComponent(EmbeddingComponent):
             # Jina local server
             try:
                 response = requests.post(
-                    Config.JINA_EMBEDDING_URL,
+                    Config.EMBEDDING_URL,
                     json=data,
                     headers={"Content-Type": "application/json"}
                 )
@@ -61,4 +63,7 @@ class JinaComponent(EmbeddingComponent):
             except requests.exceptions.RequestException as e:
                 print(f"Error calling Jina local embedding server: {e}")
                 result = []
-        """).strip() 
+        """).strip()
+
+    def get_vector_dimension(self) -> int:
+        return 384  # Jina's default dimension 

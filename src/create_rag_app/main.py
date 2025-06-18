@@ -9,12 +9,19 @@ import logging
 
 from create_rag_app.components.embedding.jina import JinaComponent
 from create_rag_app.components.embedding.all_minilm import AllMiniLMComponent
+from create_rag_app.components.vectorstore.qdrant import QdrantComponent
+from create_rag_app.components.vectorstore.pinecone import PineconeComponent
 
 logger = logging.getLogger(__name__)
 
 EMBEDDING_REGISTRY = {
     "jina": JinaComponent,
     "all_minilm_l6_v2": AllMiniLMComponent,
+}
+
+VECTORSTORE_REGISTRY = {
+    "qdrant": QdrantComponent,
+    "pinecone": PineconeComponent,
 }
 
 def generate_template_context(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -29,7 +36,11 @@ def generate_template_context(config: Dict[str, Any]) -> Dict[str, Any]:
         EmbeddingClass = EMBEDDING_REGISTRY[embedding_id]
         context["embedding_component"] = EmbeddingClass(config["embedding"])
 
-    # Add other component instantiation logic here...
+    # Create vector store component instance
+    vectorstore_id = config["vector_db"]["id"]
+    if vectorstore_id in VECTORSTORE_REGISTRY:
+        VectorStoreClass = VECTORSTORE_REGISTRY[vectorstore_id]
+        context["vectorstore_component"] = VectorStoreClass(config["vector_db"])
 
     return context
 
@@ -69,14 +80,9 @@ class RAGAppGenerator:
         
         # Generate core files
         core_files = {
-            # 'src/config.py': 'base/src/config.py.j2',
-            # 'src/rag_pipeline.py': 'base/src/rag_pipeline.py.j2',
-            # 'src/generator.py': 'base/src/generator.py.j2',
-            # 'src/vectorstore.py': 'base/src/vectorstore.py.j2',
+            'config.py': 'config.py.j2',
             'src/utils/embedder.py': 'src/utils/embedder.py.j2',
-            
-            # 'src/utils/loader.py': 'base/src/utils/loader.py.j2',
-            # 'src/utils/pydantic.py': 'base/src/utils/pydantic.py.j2',
+            'src/vectorstore.py': 'src/vectorstore.py.j2',
             'app.py': 'app.py.j2',
             'frontend.py': 'frontend.py.j2',
             'requirements.txt': 'requirements.txt.j2',

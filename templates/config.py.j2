@@ -1,0 +1,20 @@
+import os
+from dotenv import load_dotenv
+
+# Load .env variables
+load_dotenv()
+
+class Config:
+    """Configuration class for the application."""
+
+    # Embedding Configuration
+    {% for env_var in embedding_component.get_env_vars() %}
+    {{ env_var }}
+    {% endfor %}
+
+    # Vector Store Configuration
+    {% for env_var in vectorstore_component.get_env_vars() %}
+    {{ env_var }}
+    {% endfor %}
+
+    
