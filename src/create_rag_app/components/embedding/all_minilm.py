@@ -2,46 +2,49 @@
 all-MiniLM-L6-v2 embedding component.
 """
 from textwrap import dedent
-from create_rag_app.components.base import EmbeddingComponent
+from ..base import EmbeddingComponent, ProvidesDockerService
 
-class AllMiniLMComponent(EmbeddingComponent):
+class AllMiniLMComponent(EmbeddingComponent, ProvidesDockerService):
     """Implementation for the all-MiniLM-L6-v2 embedding model."""
 
+    @property
+    def service_name(self) -> str:
+        """The name of the Docker service for this component."""
+        return "minilm-embedder"
+
     def get_docker_service(self) -> str:
+        # This component only supports local deployment.
         return dedent(f"""
         {self.service_name}:
             image: ghcr.io/clems4ever/torchserve-all-minilm-l6-v2:latest
             container_name: {self.service_name}
-            restart: always
+            restart: on-failure
             ports:
-              - "8080:8080"
-            depends_on:
-              - qdrant
-            stdin_open: true
-            tty: true
+              - "8081:8080" # Use a different host port to avoid conflicts
             networks:
               - app-network
-            expose:
-              - 8080
         """).strip()
 
     def get_env_vars(self) -> list[str]:
-        return ['EMBEDDING_URL="http://localhost:8080/predictions/all-MiniLM-L6-v2"']
+        # The URL points to the service name for Docker networking.
+        return ['EMBEDDING_URL="http://minilm-embedder:8080/predictions/all-MiniLM-L6-v2"']
 
     def get_requirements(self) -> list[str]:
-        return ["sentence-transformers"]
+        return [] # No host requirements, runs in Docker
         
     def get_code_logic(self) -> str:
         return dedent("""
             # all-MiniLM-L6-v2 local server
             try:
+                # The server expects a JSON object with an 'instances' key.
                 response = requests.post(
                     Config.EMBEDDING_URL,
-                    json=data,
+                    json={"instances": data},
                     headers={"Content-Type": "application/json"}
                 )
                 response.raise_for_status()
-                result = response.json()
+                # The response is a dict with a 'predictions' key containing a list of embeddings.
+                result = response.json()["predictions"]
             except requests.exceptions.RequestException as e:
                 print(f"Error calling MiniLM embedding server: {e}")
                 result = []

@@ -2,99 +2,90 @@
 Qdrant vector store component.
 """
 from textwrap import dedent
-from create_rag_app.components.base import VectorStoreComponent
+from ..base import VectorStoreComponent, ProvidesDockerService
 
-class QdrantComponent(VectorStoreComponent):
+class QdrantComponent(VectorStoreComponent, ProvidesDockerService):
     """Implementation for the Qdrant vector store."""
 
+    @property
+    def service_name(self) -> str:
+        """The name of the Docker service for this component."""
+        return "qdrant-vectorstore"
+
     def get_docker_service(self) -> str:
-        if self.deployment == "local":
+        if self.config.get("deployment") == "local":
             return dedent(f"""
             {self.service_name}:
-                image: qdrant/qdrant:latest
+                image: qdrant/qdrant:v1.7.4
                 container_name: {self.service_name}
-                restart: always
                 ports:
                   - "6333:6333"
                   - "6334:6334"
-                expose:
-                  - 6333
-                  - 6334
                 volumes:
-                  - ./qdrant_data:/qdrant/storage
+                  - qdrant_data:/qdrant/storage
                 networks:
                   - app-network
             """).strip()
         return ""
 
     def get_env_vars(self) -> list[str]:
-        if self.deployment == "cloud":
+        if self.config.get("deployment") == "cloud":
             return [
                 'QDRANT_URL="your-qdrant-cloud-url"',
-                'QDRANT_API_KEY="your-qdrant-api-key"'
+                'QDRANT_API_KEY="your-qdrant-api-key"',
+                'QDRANT_COLLECTION_NAME="your-collection-name"'
             ]
-        return ['QDRANT_URL="http://localhost:6333"']
+        # For local deployment
+        return [
+            'QDRANT_URL="http://qdrant-vectorstore:6333"',
+            'QDRANT_COLLECTION_NAME="rag-app-collection"'
+        ]
 
     def get_requirements(self) -> list[str]:
-        return ["qdrant-client", "langchain-qdrant"]
+        return ["qdrant-client==1.7.3"]
 
-    def get_code_logic(self) -> str:
-        if self.deployment == "cloud":
-            return dedent("""
-                self.client = QdrantClient(
-                    url=config.qdrant_url,
-                    api_key=Config.QDRANT_API_KEY
-                )
-            """).strip()
-        return dedent("""
-            self.client = QdrantClient(
-                url=config.qdrant_url
-            )
-        """).strip()
-
-    def get_collection_init_logic(self) -> str:
-        return dedent(f"""
-            try:
-                # Try to create the collection regardless of whether it exists
-                self.client.create_collection(
-                    collection_name=self.collection_name,
-                    vectors_config=models.VectorParams(
-                        size={self.get_vector_dimension()},
-                        distance=models.Distance.COSINE
-                    ),
-                    quantization_config=models.ScalarQuantization(
-                        scalar=models.ScalarQuantizationConfig(
-                            type=models.ScalarType.INT8,
-                            always_ram=True,
-                        ),
-                    ),
-                )
-                print(f"Collection '{{self.collection_name}}' created successfully!")
-                
-                # Update collection with HNSW parameters
-                self.client.update_collection(
-                    collection_name=self.collection_name,
-                    hnsw_config=models.HnswConfigDiff(
-                        m=64,
-                        ef_construct=5000,
-                        max_indexing_threads=8,
-                        on_disk=True,
-                    )
-                )
-            except Exception as e:
-                # If collection already exists, this will handle that case
-                if "already exists" in str(e):
-                    print(f"Collection '{{self.collection_name}}' already exists.")
-                else:
-                    # Re-raise any other exceptions
-                    raise
-        """).strip()
+    def get_imports(self) -> list[str]:
+        base_imports = super().get_imports()
+        base_imports.extend([
+            "from qdrant_client import QdrantClient, models"
+        ])
+        return base_imports
 
     def get_config_class(self) -> str:
         return dedent("""
-            class VectorStoreConfig(BaseModel):
-                qdrant_url: str = Field(default=Config.QDRANT_URL, description="URL for Qdrant server")
-                collection_name: str = Field(default=Config.COLLECTION_NAME, description="Name of the collection in Qdrant")
+        class VectorStoreConfig(BaseModel):
+            qdrant_url: str = Field(
+                default=Config.QDRANT_URL, 
+                description="URL for Qdrant server."
+            )
+            collection_name: str = Field(
+                default=Config.QDRANT_COLLECTION_NAME, 
+                description="Name of the collection in Qdrant."
+            )
+        """).strip()
+
+    def get_code_logic(self) -> str:
+        return dedent("""
+            # Initialize Qdrant client
+            if Config.QDRANT_API_KEY:
+                self.client = QdrantClient(url=Config.QDRANT_URL, api_key=Config.QDRANT_API_KEY)
+            else:
+                self.client = QdrantClient(url=Config.QDRANT_URL)
+
+            # Create or verify the collection
+            try:
+                self.client.get_collection(collection_name=Config.QDRANT_COLLECTION_NAME)
+                print(f"Collection '{Config.QDRANT_COLLECTION_NAME}' already exists.")
+            except Exception:
+                print(f"Collection '{Config.QDRANT_COLLECTION_NAME}' not found. Creating a new one...")
+                self.client.create_collection(
+                    collection_name=Config.QDRANT_COLLECTION_NAME,
+                    vectors_config=models.VectorParams(
+                        size=self.embeddings.get_vector_dimension(),
+                        distance=models.Distance.COSINE
+                    )
+                )
+                print("Collection created successfully.")
         """).strip()
 
     def get_vector_dimension(self) -> int:

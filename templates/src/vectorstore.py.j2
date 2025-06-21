@@ -10,9 +10,7 @@ from src.utils.embedder import Embedder
 from src.config import Config
 from pydantic import BaseModel, Field
 
-class VectorStoreConfig(BaseModel):
-    qdrant_url: str = Field(default=Config.QDRANT_URL, description="URL for Qdrant server")
-    collection_name: str = Field(default=Config.COLLECTION_NAME, description="Name of the collection in Qdrant")
+{{ vectorstore_component.get_config_class() }}
 
 class VectorStore:
     def __init__(self, config: VectorStoreConfig = VectorStoreConfig()):
@@ -23,8 +21,6 @@ class VectorStore:
         
         {{ vectorstore_component.get_code_logic() }}
         
-        # Initialize the collection/index
-        {{ vectorstore_component.get_collection_init_logic() }}
         
         # Initialize the vector store interface
         {% if vector_db.provider == "Qdrant" %}
