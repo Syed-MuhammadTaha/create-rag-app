@@ -80,5 +80,4 @@ class JinaComponent(EmbeddingComponent, ProvidesDockerService):
         """).strip()
 
     def get_vector_dimension(self) -> int:
-        # jina-embeddings-v2-base-en has a dimension of 768
         return 768 

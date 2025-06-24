@@ -11,6 +11,8 @@ from create_rag_app.components.embedding.jina import JinaComponent
 from create_rag_app.components.embedding.all_minilm import AllMiniLMComponent
 from create_rag_app.components.vectorstore.qdrant import QdrantComponent
 from create_rag_app.components.vectorstore.pinecone import PineconeComponent
+from create_rag_app.components.chunking.fixed_size import FixedSizeChunkingComponent
+from create_rag_app.components.chunking.semantic import SemanticChunkingComponent
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,12 @@ VECTORSTORE_REGISTRY = {
     "qdrant": QdrantComponent,
     "pinecone": PineconeComponent,
 }
+
+CHUNKING_REGISTRY = {
+    "fixed_size": FixedSizeChunkingComponent,
+    "semantic": SemanticChunkingComponent,
+}
+
 
 def generate_template_context(config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -41,6 +49,12 @@ def generate_template_context(config: Dict[str, Any]) -> Dict[str, Any]:
     if vectorstore_id in VECTORSTORE_REGISTRY:
         VectorStoreClass = VECTORSTORE_REGISTRY[vectorstore_id]
         context["vectorstore_component"] = VectorStoreClass(config["vector_db"])
+
+    # Create chunking component instance
+    chunking_id = config["chunking"]["id"]
+    if chunking_id in CHUNKING_REGISTRY:
+        ChunkingClass = CHUNKING_REGISTRY[chunking_id]
+        context["chunking_component"] = ChunkingClass(config["chunking"])
 
     return context
 
@@ -82,7 +96,9 @@ class RAGAppGenerator:
         core_files = {
             'config.py': 'config.py.j2',
             'src/utils/embedder.py': 'src/utils/embedder.py.j2',
+            'src/utils/loader.py': 'src/utils/loader.py.j2',
             'src/vectorstore.py': 'src/vectorstore.py.j2',
+            ''
             'app.py': 'app.py.j2',
             'frontend.py': 'frontend.py.j2',
             'requirements.txt': 'requirements.txt.j2',

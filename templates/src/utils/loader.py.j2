@@ -1,0 +1,60 @@
+import os
+import re
+from langchain_community.document_loaders import DirectoryLoader, UnstructuredPDFLoader, UnstructuredWordDocumentLoader, UnstructuredExcelLoader
+from src.config import Config
+
+{# Renders the imports based on the selected chunking component. #}
+{%- for imp in chunking_component.get_imports() %}
+{{ imp }}
+{% endfor %}
+
+{# Renders the configuration class for the chunking strategy. #}
+{{ chunking_component.get_config_class() }}
+
+class Loader:
+    """Class for processing documents and preparing them for the vector store."""
+
+    @classmethod
+    def remove_special_characters(cls, text: str) -> str:
+        """Cleans text by removing special characters, keeping only letters, numbers, and spaces."""
+        return re.sub(r'[^a-zA-Z0-9 \\n\\.]', ' ', text)
+
+    {# Renders the split_text method from the component. #}
+    {{ chunking_component.get_code_logic() | indent(4) }}
+
+    @classmethod
+    def load_documents(cls, config: ChunkingConfig = ChunkingConfig()):
+        """
+        Loads documents from the specified directory, chunks them, and returns a list
+        of dictionaries formatted for insertion into the vector store.
+        """
+        # Define loaders for different file types
+        pdf_loader = DirectoryLoader(Config.INGEST_FOLDER, glob="**/*.pdf", loader_cls=UnstructuredPDFLoader, show_progress=True)
+        word_loader = DirectoryLoader(Config.INGEST_FOLDER, glob="**/*.docx", loader_cls=UnstructuredWordDocumentLoader, show_progress=True)
+        excel_loader = DirectoryLoader(Config.INGEST_FOLDER, glob="**/*.xlsx", loader_cls=UnstructuredExcelLoader, show_progress=True)
+        
+        # Load all documents
+        print("Loading documents...")
+        docs = pdf_loader.load() + word_loader.load() + excel_loader.load()
+        
+        # Process documents
+        print(f"Processing {len(docs)} documents...")
+        processed_docs = []
+        for doc in docs:
+            file_path = doc.metadata.get("source", "unknown")
+            user_id = os.path.basename(os.path.dirname(file_path))
+            filename = os.path.basename(file_path)
+            
+            cleaned_text = cls.remove_special_characters(doc.page_content)
+            chunks = cls.split_text(cleaned_text, config)
+
+            for chunk in chunks:
+                processed_docs.append({
+                    "user_id": user_id,
+                    "filepath": file_path,
+                    "filename": filename,
+                    "content": chunk
+                })
+        
+        print(f"Created {len(processed_docs)} chunks.")
+        return processed_docs 

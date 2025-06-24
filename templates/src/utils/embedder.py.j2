@@ -26,3 +26,9 @@ class Embedder(BaseModel, Embeddings):
         data = {"input": texts}
         {{ embedding_component.get_code_logic() | indent(8) }}
         return result
+
+    def get_vector_dimension(self) -> int:
+        """
+        Returns the vector dimension of the embedding model.
+        """
+        return {{ embedding_component.get_vector_dimension() }}

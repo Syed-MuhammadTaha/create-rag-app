@@ -27,10 +27,10 @@ class AllMiniLMComponent(EmbeddingComponent, ProvidesDockerService):
 
     def get_env_vars(self) -> list[str]:
         # The URL points to the service name for Docker networking.
-        return ['EMBEDDING_URL="http://minilm-embedder:8080/predictions/all-MiniLM-L6-v2"']
+        return ['EMBEDDING_URL="http://minilm-embedder:8080/predictions/my_model"']
 
     def get_requirements(self) -> list[str]:
-        return [] # No host requirements, runs in Docker
+        return []
         
     def get_code_logic(self) -> str:
         return dedent("""

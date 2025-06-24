@@ -16,13 +16,17 @@ class QdrantComponent(VectorStoreComponent, ProvidesDockerService):
         if self.config.get("deployment") == "local":
             return dedent(f"""
             {self.service_name}:
-                image: qdrant/qdrant:v1.7.4
+                image: qdrant/qdrant:v1.12.5
                 container_name: {self.service_name}
                 ports:
-                  - "6333:6333"
-                  - "6334:6334"
+                  - 6333:6333
+                  - 6334:6334
+                expose:
+                  - 6333
+                  - 6334
+                  - 6335
                 volumes:
-                  - qdrant_data:/qdrant/storage
+                  - ./qdrant_data:/qdrant/storage
                 networks:
                   - app-network
             """).strip()
@@ -33,21 +37,23 @@ class QdrantComponent(VectorStoreComponent, ProvidesDockerService):
             return [
                 'QDRANT_URL="your-qdrant-cloud-url"',
                 'QDRANT_API_KEY="your-qdrant-api-key"',
-                'QDRANT_COLLECTION_NAME="your-collection-name"'
+                'QDRANT_COLLECTION_NAME="rag-db"'
             ]
         # For local deployment
         return [
             'QDRANT_URL="http://qdrant-vectorstore:6333"',
-            'QDRANT_COLLECTION_NAME="rag-app-collection"'
+            'QDRANT_COLLECTION_NAME="rag-db"'
         ]
 
     def get_requirements(self) -> list[str]:
-        return ["qdrant-client==1.7.3"]
+        return ["qdrant-client", "langchain-qdrant"]
 
     def get_imports(self) -> list[str]:
         base_imports = super().get_imports()
         base_imports.extend([
-            "from qdrant_client import QdrantClient, models"
+            "from qdrant_client import QdrantClient",
+            "from qdrant_client.http.models import Distance, VectorParams",
+            "from langchain_qdrant import QdrantVectorStore"
         ])
         return base_imports
 
@@ -64,30 +70,38 @@ class QdrantComponent(VectorStoreComponent, ProvidesDockerService):
             )
         """).strip()
 
-    def get_code_logic(self) -> str:
+    def get_init_logic(self) -> str:
         return dedent("""
+            self.embeddings = Embedder()
+            
             # Initialize Qdrant client
-            if Config.QDRANT_API_KEY:
-                self.client = QdrantClient(url=Config.QDRANT_URL, api_key=Config.QDRANT_API_KEY)
+            if hasattr(config, 'qdrant_api_key') and config.qdrant_api_key:
+                self.client = QdrantClient(url=config.qdrant_url, api_key=config.qdrant_api_key)
             else:
-                self.client = QdrantClient(url=Config.QDRANT_URL)
-
-            # Create or verify the collection
-            try:
-                self.client.get_collection(collection_name=Config.QDRANT_COLLECTION_NAME)
-                print(f"Collection '{Config.QDRANT_COLLECTION_NAME}' already exists.")
-            except Exception:
-                print(f"Collection '{Config.QDRANT_COLLECTION_NAME}' not found. Creating a new one...")
-                self.client.create_collection(
-                    collection_name=Config.QDRANT_COLLECTION_NAME,
-                    vectors_config=models.VectorParams(
-                        size=self.embeddings.get_vector_dimension(),
-                        distance=models.Distance.COSINE
-                    )
-                )
-                print("Collection created successfully.")
+                self.client = QdrantClient(url=config.qdrant_url)
+            
+            self.collection_name = config.collection_name
+            self.initialize_collection()
+            
+            self.vector_store = QdrantVectorStore(
+                client=self.client,
+                collection_name=self.collection_name,
+                embedding=self.embeddings
+            )
         """).strip()
 
-    def get_vector_dimension(self) -> int:
-        # This should be coordinated with the embedding model's dimension
-        return 384  # Default for MiniLM
+    def get_initialize_collection_logic(self) -> str:
+        return dedent("""
+            collections = [c.name for c in self.client.get_collections().collections]
+            if self.collection_name not in collections:
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=VectorParams(
+                        size=self.embeddings.get_vector_dimension(),
+                        distance=Distance.COSINE
+                    )
+                )
+                print(f"Collection '{self.collection_name}' created successfully.")
+            else:
+                print(f"Collection '{self.collection_name}' already exists.")
+        """).strip()

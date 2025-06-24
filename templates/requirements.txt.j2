@@ -12,3 +12,7 @@ langchain-openai
 {% for req in embedding_component.get_requirements() %}
 {{ req }}
 {% endfor %}
+
+{% for req in vectorstore_component.get_requirements() %}
+{{ req }}
+{% endfor %}

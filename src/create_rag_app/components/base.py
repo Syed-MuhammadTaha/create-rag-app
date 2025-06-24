@@ -96,8 +96,13 @@ class VectorStoreComponent(BaseComponent, ProvidesPythonDependencies):
     """
     
     @abstractmethod
-    def get_code_logic(self) -> str:
-        """Returns the Python code block for initializing the vector store client and collection."""
+    def get_init_logic(self) -> str:
+        """Returns the Python code block for the __init__ method of the VectorStore class."""
+        pass
+
+    @abstractmethod
+    def get_initialize_collection_logic(self) -> str:
+        """Returns the Python code block for the initialize_collection method."""
         pass
 
     @abstractmethod
@@ -110,6 +115,28 @@ class VectorStoreComponent(BaseComponent, ProvidesPythonDependencies):
         return [
             "from typing import List, Dict, Any",
             "from pydantic import BaseModel, Field",
-            "from config import Config",
-            "from .utils.embedder import Embedder"
-        ] 
+            "from src.config import Config",
+            "from src.utils.embedder import Embedder"
+        ]
+
+class ChunkingComponent(BaseComponent, ProvidesPythonDependencies):
+    """
+    Abstract base class for chunking components.
+    """
+
+    @abstractmethod
+    def get_code_logic(self) -> str:
+        """Returns the Python code block for the chunking logic (e.g., split_text method)."""
+        pass
+
+    @abstractmethod
+    def get_config_class(self) -> str:
+        """Returns the configuration class definition for the chunking strategy."""
+        pass
+
+    def get_imports(self) -> List[str]:
+        """Returns common imports for chunking components."""
+        return [
+            "from pydantic import BaseModel, Field",
+            "from src.config import Config",
+        ]
