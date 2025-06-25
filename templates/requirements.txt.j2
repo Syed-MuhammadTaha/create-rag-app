@@ -16,3 +16,8 @@ langchain-openai
 {% for req in vectorstore_component.get_requirements() %}
 {{ req }}
 {% endfor %}
+
+{% for req in chunking_component.get_requirements() %}
+{{ req }}
+{% endfor %}
+

@@ -98,7 +98,7 @@ class RAGAppGenerator:
             'src/utils/embedder.py': 'src/utils/embedder.py.j2',
             'src/utils/loader.py': 'src/utils/loader.py.j2',
             'src/vectorstore.py': 'src/vectorstore.py.j2',
-            ''
+            'src/rag_pipeline.py': 'src/rag_pipeline.py.j2',
             'app.py': 'app.py.j2',
             'frontend.py': 'frontend.py.j2',
             'requirements.txt': 'requirements.txt.j2',

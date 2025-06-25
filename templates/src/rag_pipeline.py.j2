@@ -1,0 +1,229 @@
+from src.utils.embedder import Embedder
+from src.vectorstore import VectorStore
+from src.loader import Loader
+from typing import List, Dict, Any, Generator as PyGenerator, Optional
+import os
+import time
+import uuid
+from src.config import Config
+import json
+from pydantic import BaseModel, Field
+
+class DocumentMetadata(BaseModel):
+    user_id: str
+    filename: str
+    filepath: str
+
+class Document(BaseModel):
+    content: str
+    user_id: str
+    filename: str
+    filepath: str
+
+class RetrievedDocument(BaseModel):
+    index: int
+    content: str
+    filename: str
+    filepath: str
+    file_type: str
+    score: float
+
+class QueryResponse(BaseModel):
+    results: Optional[List[RetrievedDocument]] = None
+    error: Optional[str] = None
+
+class ProgressUpdate(BaseModel):
+    progress: int = Field(..., description="Progress percentage (0-100)")
+    processed: Optional[int] = None
+    total: Optional[int] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+class RAGPipeline:
+    def __init__(self, vector_store: VectorStore):
+        """
+        Initialize the RAG pipeline with a vector store.
+        """
+        self.vector_store = vector_store
+        self.embedder = Embedder()
+
+    def document_exists(self, content: str) -> bool:
+        """Check if a document with the given content exists in the vector store using similarity search."""
+        try:
+            results = self.vector_store.vector_store.similarity_search(
+                query=content,
+                k=1
+            )
+            # Check if any result has exactly the same content
+            for result in results:
+                if hasattr(result, 'page_content') and result.page_content.strip() == content.strip():
+                    return True
+            return False
+        except Exception as e:
+            print(f"Error checking document existence: {str(e)}")
+            return False
+
+    def ingest_documents(self, batch_size: int = 10) -> PyGenerator[str, None, None]:
+        """Ingest documents from the configured folder with progress updates."""
+        if not os.path.exists(Config.INGEST_FOLDER):
+            update = ProgressUpdate(progress=0, error="Folder path does not exist")
+            yield json.dumps(update.dict()) + "\n"
+            return
+
+        try:
+            data = Loader.load_documents()
+            total_documents = len(data)
+            processed_documents = 0
+
+            if total_documents == 0:
+                update = ProgressUpdate(progress=100, message="No documents found to process")
+                yield json.dumps(update.dict()) + "\n"
+                return
+
+            # Process documents in batches
+            for i in range(0, total_documents, batch_size):
+                batch = data[i:i + batch_size]
+                
+                # Filter out duplicates
+                new_docs = []
+                for doc in batch:
+                    if not self.document_exists(doc["content"]):
+                        new_docs.append(doc)
+                    else:
+                        processed_documents += 1
+                        update = ProgressUpdate(
+                            progress=int((processed_documents / total_documents) * 100),
+                            processed=processed_documents,
+                            total=total_documents,
+                            message="Duplicate detected, skipping"
+                        )
+                        yield json.dumps(update.dict()) + "\n"
+
+                # Process new documents
+                if new_docs:
+                    inserted_count = self.process_batch(new_docs)
+                    processed_documents += inserted_count
+
+                # Calculate progress
+                progress = min(100, int((processed_documents / total_documents) * 100))
+
+                # Send progress update
+                update = ProgressUpdate(
+                    progress=progress,
+                    processed=processed_documents,
+                    total=total_documents,
+                    message=f"Processed batch {i//batch_size + 1}"
+                )
+                yield json.dumps(update.dict()) + "\n"
+
+            # Final completion message
+            update = ProgressUpdate(progress=100, message="Document ingestion completed!")
+            yield json.dumps(update.dict()) + "\n"
+
+        except Exception as e:
+            update = ProgressUpdate(progress=0, error=f"Error during ingestion: {str(e)}")
+            yield json.dumps(update.dict()) + "\n"
+
+    def process_batch(self, doc_batch: List[Dict[str, Any]]) -> int:
+        """Process a batch of documents and insert them into the vector store."""
+        batch_start_time = time.time()
+
+        try:
+            ids = [str(uuid.uuid4()) for _ in doc_batch]
+            texts = [doc["content"] for doc in doc_batch]
+            metadatas = [
+                {
+                    "user_id": doc["user_id"],
+                    "filename": doc["filename"],
+                    "filepath": doc["filepath"],
+                }
+                for doc in doc_batch
+            ]
+
+            print(f"Inserting {len(texts)} documents...")
+
+            # Use the vector store's add_texts method
+            self.vector_store.vector_store.add_texts(
+                texts=texts, 
+                metadatas=metadatas, 
+                ids=ids
+            )
+
+            batch_time = time.time() - batch_start_time
+            print(f"Successfully inserted {len(texts)} documents in {batch_time:.2f} seconds. Speed: {len(texts) / batch_time:.2f} docs/sec")
+            return len(texts)
+
+        except Exception as e:
+            print(f"Error inserting batch: {str(e)}")
+            return 0
+
+    def query_documents(self, query_text: str, top_k: int = 5) -> QueryResponse:
+        """
+        Search the vector store for relevant document chunks based on query text.
+        """
+        try:
+            # Get search results with relevance scores
+            search_results = self.vector_store.vector_store.similarity_search_with_relevance_scores(
+                query=query_text, 
+                k=top_k
+            )
+
+            # Format the results
+            retrieved_docs = []
+            for i, (doc, score) in enumerate(search_results):
+                filename = doc.metadata.get("filename", "Unknown filename")
+                filepath = doc.metadata.get("filepath", "Unknown filepath")
+
+                # Extract file extension
+                file_extension = os.path.splitext(filename)[1] if filename != "Unknown filename" else ""
+
+                # Get file type
+                file_type = self.get_document_type(file_extension)
+
+                retrieved_docs.append(
+                    RetrievedDocument(
+                        index=i + 1,
+                        content=doc.page_content,
+                        filename=filename,
+                        filepath=filepath,
+                        file_type=file_type,
+                        score=float(score)
+                    )
+                )
+
+            return QueryResponse(results=retrieved_docs)
+
+        except Exception as e:
+            print(f"Error in query: {str(e)}")
+            return QueryResponse(error=str(e))
+
+    def get_document_type(self, extension: str) -> str:
+        """
+        Determines the document type based on the file extension.
+        """
+        document_types = {
+            ".pdf": "PDF",
+            ".docx": "Word Document",
+            ".txt": "Text File",
+            ".csv": "CSV File",
+            ".xlsx": "Excel File",
+            ".pptx": "PowerPoint File",
+            ".html": "HTML Document",
+        }
+        return document_types.get(extension.lower(), "Unknown")
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get statistics about the vector store."""
+        try:
+            # This is a generic approach - specific implementations might override this
+            sample_results = self.vector_store.vector_store.similarity_search("", k=1)
+            return {
+                "status": "active",
+                "has_documents": len(sample_results) > 0
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "has_documents": False
+            }
