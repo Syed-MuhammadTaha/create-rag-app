@@ -21,3 +21,7 @@ langchain-openai
 {{ req }}
 {% endfor %}
 
+{% for req in retrieval_component.get_retrieval_requirements() %}
+{{ req }}
+{% endfor %}
+

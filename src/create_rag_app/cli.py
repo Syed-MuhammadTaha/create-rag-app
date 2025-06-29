@@ -71,13 +71,14 @@ EMBEDDING_MODELS = {
 }
 
 CHUNKING_STRATEGIES = {
-    "Fixed size": {"description": "Split by character count"},
+    "Fixed": {"description": "Split by character count"},
     "Semantic": {"description": "Split by semantic meaning"}
 }
 
 RETRIEVAL_METHODS = {
-    "Basic Vector Search": {"description": "Simple similarity search"},
-    "Hybrid Search": {"description": "Combined vector + keyword search"}
+    "Dense Vector Search": {"description": "Dense vector similarity search"},
+    "Sparse Vector Search": {"description": "Keyword-based sparse search"},
+    "Hybrid Search": {"description": "Combined dense + sparse search"}
 }
 
 def format_choices(options: dict) -> list[str]:
@@ -89,8 +90,8 @@ def extract_choice(answer: str) -> str:
     return answer.split(" - ")[0]
 
 def generate_component_id(name: str) -> str:
-    """Generate a component ID from its name by converting to lowercase and replacing hyphens with underscores."""
-    return name.lower().replace("-", "_")
+    """Generate a component ID from its name by converting to lowercase and replacing spaces and hyphens with underscores."""
+    return name.lower().replace(" ", "_").replace("-", "_")
 
 def get_deployment_preference(component_name: str, selected_option: str, options_dict: dict) -> str:
     """Get deployment preference for a component."""
@@ -194,8 +195,14 @@ def collect_config() -> Dict[str, Any]:
             "deployment": vector_db_deployment,
             "id": generate_component_id(vector_db)
         },
-        "chunking_strategy": chunking_strategy,
-        "retrieval_method": retrieval_method,
+        "chunking": {
+            "strategy": chunking_strategy,
+            "id": generate_component_id(chunking_strategy)
+        },
+        "retrieval": {
+            "method": retrieval_method,
+            "id": generate_component_id(retrieval_method)
+        },
         "llm": llm_config
     }
 
@@ -222,10 +229,10 @@ def main():
             f"• Deployment: [cyan]{config['vector_db']['deployment']}[/cyan]",
             "",
             "[bold orange1]Processing[/bold orange1] 📄",
-            f"• Chunking: [cyan]{config['chunking_strategy']}[/cyan]",
+            f"• Chunking: [cyan]{config['chunking']['strategy']}[/cyan]",
             "",
             "[bold red]Retrieval[/bold red] 🔍",
-            f"• Method: [cyan]{config['retrieval_method']}[/cyan]",
+            f"• Method: [cyan]{config['retrieval']['method']}[/cyan]",
             "",
             "[bold green1]Language Model[/bold green1] 🤖",
             f"• Provider: [cyan]{config['llm']['model']}[/cyan]",

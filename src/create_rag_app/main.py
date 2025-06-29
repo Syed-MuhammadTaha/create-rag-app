@@ -13,6 +13,9 @@ from create_rag_app.components.vectorstore.qdrant import QdrantComponent
 from create_rag_app.components.vectorstore.pinecone import PineconeComponent
 from create_rag_app.components.chunking.fixed_size import FixedSizeChunkingComponent
 from create_rag_app.components.chunking.semantic import SemanticChunkingComponent
+from create_rag_app.components.retriever.dense import DenseRetrievalComponent
+from create_rag_app.components.retriever.sparse import SparseRetrievalComponent
+from create_rag_app.components.retriever.hybrid import HybridRetrievalComponent
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +30,14 @@ VECTORSTORE_REGISTRY = {
 }
 
 CHUNKING_REGISTRY = {
-    "fixed_size": FixedSizeChunkingComponent,
+    "fixed": FixedSizeChunkingComponent,
     "semantic": SemanticChunkingComponent,
+}
+
+RETRIEVAL_REGISTRY = {
+    "dense_vector_search": DenseRetrievalComponent,
+    "sparse_vector_search": SparseRetrievalComponent,
+    "hybrid_search": HybridRetrievalComponent,
 }
 
 
@@ -43,18 +52,32 @@ def generate_template_context(config: Dict[str, Any]) -> Dict[str, Any]:
     if embedding_id in EMBEDDING_REGISTRY:
         EmbeddingClass = EMBEDDING_REGISTRY[embedding_id]
         context["embedding_component"] = EmbeddingClass(config["embedding"])
+    else:
+        logger.warning(f"Embedding component '{embedding_id}' not found in registry")
 
     # Create vector store component instance
     vectorstore_id = config["vector_db"]["id"]
     if vectorstore_id in VECTORSTORE_REGISTRY:
         VectorStoreClass = VECTORSTORE_REGISTRY[vectorstore_id]
         context["vectorstore_component"] = VectorStoreClass(config["vector_db"])
+    else:
+        logger.warning(f"VectorStore component '{vectorstore_id}' not found in registry")
 
     # Create chunking component instance
     chunking_id = config["chunking"]["id"]
     if chunking_id in CHUNKING_REGISTRY:
         ChunkingClass = CHUNKING_REGISTRY[chunking_id]
         context["chunking_component"] = ChunkingClass(config["chunking"])
+    else:
+        logger.warning(f"Chunking component '{chunking_id}' not found in registry")
+
+    # Create retrieval component instance
+    retrieval_id = config["retrieval"]["id"]
+    if retrieval_id in RETRIEVAL_REGISTRY:
+        RetrievalClass = RETRIEVAL_REGISTRY[retrieval_id]
+        context["retrieval_component"] = RetrievalClass(config["retrieval"])
+    else:
+        logger.warning(f"Retrieval component '{retrieval_id}' not found in registry")
 
     return context
 

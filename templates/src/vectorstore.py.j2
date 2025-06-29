@@ -3,6 +3,11 @@
 {{ imp }}
 {% endfor %}
 
+{# Renders the imports based on the selected retrieval component. #}
+{%- for imp in retrieval_component.get_retrieval_imports() %}
+{{ imp }}
+{% endfor %}
+
 {# Renders the configuration class for the vector store. #}
 {{ vectorstore_component.get_config_class() }}
 
@@ -12,9 +17,35 @@ class VectorStore:
         Initialize the vector store with {{ vectorstore_component.id }} client and create collection if it doesn't exist.
         """
         {{ vectorstore_component.get_init_logic() | indent(8) }}
+        
+        {# Initialize retrieval-specific configuration #}
+        {{ retrieval_component.get_retrieval_init_logic(vectorstore_component) | indent(8) }}
 
     def initialize_collection(self) -> None:
         """
         Initialize the collection with proper configuration.
         """
         {{ vectorstore_component.get_initialize_collection_logic() | indent(8) }}
+
+    {# Render retrieval methods based on the selected retrieval component #}
+    {{ retrieval_component.get_retrieval_method_logic(vectorstore_component) | indent(4) }}
+
+    def add_documents(self, documents: list, **kwargs) -> None:
+        """
+        Add documents to the vector store.
+        """
+        try:
+            self.vector_store.add_documents(documents, **kwargs)
+            print(f"Added {len(documents)} documents to the vector store.")
+        except Exception as e:
+            print(f"Error adding documents: {e}")
+
+    def delete_documents(self, ids: list[str]) -> None:
+        """
+        Delete documents from the vector store by IDs.
+        """
+        try:
+            self.vector_store.delete(ids)
+            print(f"Deleted {len(ids)} documents from the vector store.")
+        except Exception as e:
+            print(f"Error deleting documents: {e}")

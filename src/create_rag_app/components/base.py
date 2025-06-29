@@ -140,3 +140,35 @@ class ChunkingComponent(BaseComponent, ProvidesPythonDependencies):
             "from pydantic import BaseModel, Field",
             "from src.config import Config",
         ]
+
+class RetrievalComponent(BaseComponent):
+    """Base class for retrieval components."""
+    
+    def get_retrieval_imports(self) -> list[str]:
+        """Return retrieval-specific imports."""
+        return []
+    
+    def get_retrieval_requirements(self) -> list[str]:
+        """Return retrieval-specific requirements."""
+        return []
+    
+    def get_vectorstore_config_updates(self) -> str:
+        """Return configuration updates needed for the vectorstore."""
+        return ""
+    
+    def get_retrieval_init_logic(self, vectorstore_component) -> str:
+        """Return initialization logic for this retrieval method."""
+        raise NotImplementedError("Subclasses must implement get_retrieval_init_logic")
+    
+    def get_retrieval_method_logic(self, vectorstore_component) -> str:
+        """Return the retrieval method implementation."""
+        raise NotImplementedError("Subclasses must implement get_retrieval_method_logic")
+    
+    def supports_vectorstore(self, vectorstore_id: str) -> bool:
+        """Check if this retrieval method supports the given vectorstore."""
+        return True  # By default, support all vectorstores
+    
+    def get_search_method_name(self, vectorstore_id: str) -> str:
+        """Get the appropriate search method name for the vectorstore."""
+        # Default to similarity_search for all vectorstores
+        return "similarity_search"
