@@ -31,11 +31,6 @@ VECTOR_DBS = {
         "description": "Open-source embedding database, great for getting started",
         "supports_local": True,
         "supports_cloud": True
-    },
-    "Pinecone": {
-        "description": "Managed vector database service, scalable",
-        "supports_local": False,
-        "supports_cloud": True
     }
 }
 
@@ -76,9 +71,9 @@ CHUNKING_STRATEGIES = {
 }
 
 RETRIEVAL_METHODS = {
-    "Dense Vector Search": {"description": "Dense vector similarity search"},
-    "Sparse Vector Search": {"description": "Keyword-based sparse search"},
-    "Hybrid Search": {"description": "Combined dense + sparse search"}
+    "Dense Vector Search": {"description": "Similarity search using dense embeddings"},
+    "Sparse Vector Search": {"description": "Search using sparse vectors (BM25-style)"},
+    "Hybrid Vector Search": {"description": "Combined dense + sparse vector search"}
 }
 
 def format_choices(options: dict) -> list[str]:
@@ -90,7 +85,7 @@ def extract_choice(answer: str) -> str:
     return answer.split(" - ")[0]
 
 def generate_component_id(name: str) -> str:
-    """Generate a component ID from its name by converting to lowercase and replacing spaces and hyphens with underscores."""
+    """Generate a component ID from its name by converting to lowercase and replacing hyphens with underscores."""
     return name.lower().replace(" ", "_").replace("-", "_")
 
 def get_deployment_preference(component_name: str, selected_option: str, options_dict: dict) -> str:
@@ -199,11 +194,15 @@ def collect_config() -> Dict[str, Any]:
             "strategy": chunking_strategy,
             "id": generate_component_id(chunking_strategy)
         },
-        "retrieval": {
-            "method": retrieval_method,
+        "retriever": {
+            "retrieval_method": retrieval_method,
             "id": generate_component_id(retrieval_method)
         },
-        "llm": llm_config
+        "llm": {
+            "model":llm_config["model"],
+            "id": generate_component_id(llm_config["model"]),
+            "type": llm_config["type"]
+        }
     }
 
 def main():
@@ -232,7 +231,7 @@ def main():
             f"• Chunking: [cyan]{config['chunking']['strategy']}[/cyan]",
             "",
             "[bold red]Retrieval[/bold red] 🔍",
-            f"• Method: [cyan]{config['retrieval']['method']}[/cyan]",
+            f"• Method: [cyan]{config['retriever']['retrieval_method']}[/cyan]",
             "",
             "[bold green1]Language Model[/bold green1] 🤖",
             f"• Provider: [cyan]{config['llm']['model']}[/cyan]",

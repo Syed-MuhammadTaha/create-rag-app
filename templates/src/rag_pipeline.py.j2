@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Generator as PyGenerator, Optional
 import os
 import time
 import uuid
-from src.config import Config
+from config import Config
 import json
 from pydantic import BaseModel, Field
 
@@ -50,7 +50,7 @@ class RAGPipeline:
     def document_exists(self, content: str) -> bool:
         """Check if a document with the given content exists in the vector store using similarity search."""
         try:
-            results = self.vector_store.vector_store.similarity_search(
+            results = self.vector_store.retrieve(
                 query=content,
                 k=1
             )
@@ -143,7 +143,7 @@ class RAGPipeline:
             print(f"Inserting {len(texts)} documents...")
 
             # Use the vector store's add_texts method
-            self.vector_store.vector_store.add_texts(
+            self.vector_store.add_texts(
                 texts=texts, 
                 metadatas=metadatas, 
                 ids=ids
@@ -163,7 +163,7 @@ class RAGPipeline:
         """
         try:
             # Get search results with relevance scores
-            search_results = self.vector_store.vector_store.similarity_search_with_relevance_scores(
+            search_results = self.vector_store.retrieve_with_score(
                 query=query_text, 
                 k=top_k
             )

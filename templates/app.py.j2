@@ -1,0 +1,47 @@
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+from src.vectorstore import VectorStore, VectorStoreConfig
+from src.rag_pipeline import RAGPipeline, QueryResponse
+from src.generator import Generator, GenerationResponse, GeneratorConfig
+from fastapi.responses import StreamingResponse
+
+app = FastAPI()
+
+vector_store = VectorStore(VectorStoreConfig())
+rag_pipeline = RAGPipeline(vector_store)
+response_generator = Generator(rag_pipeline, GeneratorConfig())
+
+
+class QueryRequest(BaseModel):
+    query: str = Field(..., description="The user query")
+    top_k: int = Field(default=5, description="Number of documents to retrieve")
+
+
+class HealthResponse(BaseModel):
+    status: str
+
+
+@app.get("/health", response_model=HealthResponse)
+def health_check() -> HealthResponse:
+    return HealthResponse(status="ok")
+
+
+@app.post("/ingest")
+def ingest():
+    return StreamingResponse(rag_pipeline.ingest_documents(), media_type="text/event-stream")
+
+
+@app.post("/retrieve", response_model=QueryResponse)
+def retrieve(query_request: QueryRequest) -> QueryResponse:
+    """
+    API endpoint to retrieve documents from Qdrant.
+    """
+    return vector_store.retrieve(query_request.query, query_request.top_k)
+
+
+@app.post("/generate", response_model=GenerationResponse)
+def generate(query_request: QueryRequest) -> GenerationResponse:
+    """
+    API endpoint to generate a response based on the query.
+    """
+    return response_generator.generate_response(query_request.query, query_request.top_k)

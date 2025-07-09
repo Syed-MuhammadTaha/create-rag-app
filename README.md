@@ -25,7 +25,7 @@ npx create-rag-app
 And answer a few questions:
 
 - **LLM Provider?** (OpenAI, Claude, Local)
-- **Vector DB?** (FAISS, Pinecone, Weaviate)
+- **Vector DB?** (Qdrant)
 - **Frontend?** (None, Streamlit, Next.js)
 - **Document Loader?** (Local, Web, Notion, YouTube)
 - **Chunking Strategy?** (Fixed, Recursive, Metadata-aware)
@@ -67,7 +67,7 @@ Here's what's on the roadmap for the first MVP:
 ### 🧠 RAG Configuration
 - LLM selection (OpenAI, Anthropic, local models)
 - Embedder selection (OpenAI, BGE, Cohere, etc.)
-- Vector DB support (FAISS, Pinecone, Weaviate)
+- Vector DB support (Qdrant)
 - Data loader types (PDF, YouTube, Notion, Web)
 
 ### 🧱 Frontend (optional)

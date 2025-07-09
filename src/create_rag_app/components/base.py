@@ -115,7 +115,7 @@ class VectorStoreComponent(BaseComponent, ProvidesPythonDependencies):
         return [
             "from typing import List, Dict, Any",
             "from pydantic import BaseModel, Field",
-            "from src.config import Config",
+            "from config import Config",
             "from src.utils.embedder import Embedder"
         ]
 
@@ -138,37 +138,53 @@ class ChunkingComponent(BaseComponent, ProvidesPythonDependencies):
         """Returns common imports for chunking components."""
         return [
             "from pydantic import BaseModel, Field",
-            "from src.config import Config",
+            "from config import Config",
         ]
 
-class RetrievalComponent(BaseComponent):
-    """Base class for retrieval components."""
-    
-    def get_retrieval_imports(self) -> list[str]:
-        """Return retrieval-specific imports."""
-        return []
-    
-    def get_retrieval_requirements(self) -> list[str]:
-        """Return retrieval-specific requirements."""
-        return []
-    
-    def get_vectorstore_config_updates(self) -> str:
-        """Return configuration updates needed for the vectorstore."""
-        return ""
-    
-    def get_retrieval_init_logic(self, vectorstore_component) -> str:
-        """Return initialization logic for this retrieval method."""
-        raise NotImplementedError("Subclasses must implement get_retrieval_init_logic")
-    
-    def get_retrieval_method_logic(self, vectorstore_component) -> str:
-        """Return the retrieval method implementation."""
-        raise NotImplementedError("Subclasses must implement get_retrieval_method_logic")
-    
-    def supports_vectorstore(self, vectorstore_id: str) -> bool:
-        """Check if this retrieval method supports the given vectorstore."""
-        return True  # By default, support all vectorstores
-    
-    def get_search_method_name(self, vectorstore_id: str) -> str:
-        """Get the appropriate search method name for the vectorstore."""
-        # Default to similarity_search for all vectorstores
-        return "similarity_search"
+class RetrievalComponent(BaseComponent, ProvidesPythonDependencies):
+    """
+    Abstract base class for retrieval strategy components.
+    Retrieval components define how vectors are searched and define
+    requirements for the vectorstore configuration.
+    """
+
+    @abstractmethod
+    def get_vectorstore_requirements(self) -> Dict[str, Any]:
+        """
+        Returns the requirements this retrieval method needs from the vectorstore.
+        This enables dependency injection without tight coupling.
+        
+        Returns:
+            Dict containing requirements like:
+            - "retrieval_mode": RetrievalMode enum value
+            - "needs_sparse_embedding": bool
+            - "sparse_vector_name": str (optional)
+            - "vector_name": str (optional)
+            - "additional_imports": List[str] (optional)
+            - "additional_requirements": List[str] (optional)
+        """
+        pass
+
+    @abstractmethod
+    def get_retrieval_logic(self) -> str:
+        """Returns the Python code block for the retrieval method implementation."""
+        pass
+
+    def get_imports(self) -> List[str]:
+        """Returns common imports for retrieval components."""
+        return [
+            "from typing import List, Dict, Any",
+            "from langchain_core.documents import Document",
+        ]
+
+class LLMComponent(BaseComponent, ProvidesPythonDependencies):
+    """Base class for all LLM components."""
+    @abstractmethod
+    def get_config_class(self) -> str:
+        """Returns the configuration class definition for the LLM."""
+        pass
+
+    @abstractmethod
+    def get_init_logic(self) -> str:
+        """Returns the Python code block for the __init__ method of the LLM class."""
+        pass

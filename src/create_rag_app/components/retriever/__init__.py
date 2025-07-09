@@ -1,3 +1,3 @@
 """
-Retrieval components for different search strategies.
+Retrieval strategy components for RAG applications.
 """ 

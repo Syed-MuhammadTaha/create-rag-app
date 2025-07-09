@@ -17,4 +17,15 @@ class Config:
     {{ env_var }}
     {% endfor %}
 
+    # Retriever Configuration
+    {% for env_var in retriever_component.get_env_vars() %}
+    {{ env_var }}
+    {% endfor %}
+
+    # File Configurations
+    INGEST_FOLDER = "data/"
     
+    # LLM Configuration
+    {% for env_var in llm_component.get_env_vars() %}
+    {{ env_var }}
+    {% endfor %}

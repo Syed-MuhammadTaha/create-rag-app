@@ -7,6 +7,7 @@ langchain
 langchain-community
 langchain-core
 langchain-openai
+streamlit
 
 # Component-specific dependencies
 {% for req in embedding_component.get_requirements() %}
@@ -21,7 +22,10 @@ langchain-openai
 {{ req }}
 {% endfor %}
 
-{% for req in retrieval_component.get_retrieval_requirements() %}
+{% for req in llm_component.get_requirements() %}
 {{ req }}
 {% endfor %}
 
+{% for req in retriever_component.get_requirements() %}
+{{ req }}
+{% endfor %}

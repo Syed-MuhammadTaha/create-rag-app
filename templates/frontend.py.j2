@@ -1,0 +1,86 @@
+import streamlit as st
+import requests
+from config import Config
+import json
+
+st.set_page_config(page_title="RAG ChatBot", layout="wide")
+
+st.title("🤖 RAG ChatBot")
+
+# Sidebar for Navigation
+st.sidebar.title("📌 Navigation")
+def ingest_with_progress():
+    progress_bar = st.sidebar.progress(0)
+    status_text = st.sidebar.empty()
+    warning_placeholder = st.sidebar.empty()
+
+    with requests.post(
+        f"{Config.BACKEND_URL}/ingest",
+        stream=True  # Enable streaming
+    ) as response:
+        if response.status_code == 200:
+            for line in response.iter_lines():
+                if line:
+                    data = json.loads(line.decode("utf-8"))
+                    progress = data.get("progress", 0)
+                    processed = data.get("processed", 0)
+                    total = data.get("total", 1)
+                    message = data.get("message", "")
+
+                    progress_bar.progress(progress)
+                    status_text.text(f"Ingesting... {processed}/{total} documents")
+
+                    if message == "Duplicate detected":
+                        warning_placeholder.warning(message)
+                        
+                    elif progress == 100:
+                        warning_placeholder.empty()
+                        st.sidebar.success(message)
+        else:
+            st.sidebar.error(f"Error: {response.json().get('detail', 'Unknown error')}")
+
+if st.sidebar.button("🚀 Ingest Data"):
+    ingest_with_progress()
+
+# Sidebar for Retrieved Chunks
+st.sidebar.markdown("## 🔍 Retrieved Chunks")
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Chat Input
+if prompt := st.chat_input("Enter your query:"):
+    st.chat_message("user").markdown(prompt)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    response = requests.post(
+        f"{Config.BACKEND_URL}/generate", json={"query": prompt}
+    )
+
+    if response.status_code == 200:
+        response_json = response.json()
+        assistant_response = response_json.get("results", "No response generated.")
+        retrieved_docs = response_json.get("retrieved_docs", [])
+    else:
+        assistant_response = f"Error: {response.json().get('detail', 'Unknown error')}"
+        retrieved_docs = []
+
+    # Display Retrieved Chunks in Sidebar
+    if retrieved_docs:
+        for idx, doc in enumerate(retrieved_docs):
+            with st.sidebar.expander(f"📄 Chunk {doc['index']}"):
+                st.markdown(f"**Content:**\n{doc['content']}")
+                st.markdown(f"**📂 Filename:** `{doc['filename']}`")
+                st.markdown(f"**📁 Filepath:** `{doc['filepath']}`")
+                st.markdown(f"**🔢 Score:** `{doc['score']:.4f}`")
+                st.markdown(f"**File Type:** `{doc['file_type']}`")
+    
+    # Display Generated Response
+    with st.chat_message("assistant"):
+        st.markdown(assistant_response)
+
+    st.session_state.messages.append({"role": "assistant", "content": assistant_response})

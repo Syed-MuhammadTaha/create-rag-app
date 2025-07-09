@@ -1,69 +1,46 @@
 """
-Dense vector retrieval component.
+Dense vector search retrieval component.
 """
 from textwrap import dedent
+from typing import Dict, Any, List
 from ..base import RetrievalComponent
 
 class DenseRetrievalComponent(RetrievalComponent):
-    """Implementation for dense vector retrieval."""
+    """Implementation for dense vector search retrieval."""
 
-    def get_retrieval_imports(self) -> list[str]:
-        return []  # No additional imports needed for dense retrieval
+    def get_env_vars(self) -> list[str]:
+        """Dense retrieval doesn't need additional environment variables."""
+        return []
 
-    def get_retrieval_requirements(self) -> list[str]:
-        return []  # No additional requirements for dense retrieval
+    def get_requirements(self) -> list[str]:
+        """Dense retrieval doesn't need additional requirements beyond langchain-qdrant."""
+        return []
 
-    def get_vectorstore_config_updates(self) -> str:
-        """Dense retrieval doesn't need special vectorstore configuration."""
-        return ""
+    def get_imports(self) -> list[str]:
+        """Returns imports needed for dense retrieval."""
+        base_imports = super().get_imports()
+        base_imports.extend([
+            "from langchain_qdrant import RetrievalMode"
+        ])
+        return base_imports
 
-    def get_retrieval_init_logic(self, vectorstore_component) -> str:
-        """Return initialization logic for dense retrieval."""
-        vectorstore_id = vectorstore_component.config.get("id", "unknown")
-        
-        if vectorstore_id == "qdrant":
-            return dedent("""
-                # Dense retrieval initialization for Qdrant
-                from langchain_qdrant import RetrievalMode
-                
-                # Configure the vector store for dense retrieval
-                self.vector_store.retrieval_mode = RetrievalMode.DENSE
-            """).strip()
-        
-        # For Pinecone and other vectorstores, dense is the default
+    def get_vectorstore_requirements(self) -> dict[str, any]:
+        """Returns requirements for dense vector search."""
+        return {
+            "retrieval_mode": "RetrievalMode.DENSE",
+            "needs_sparse_embedding": False,
+            "additional_imports": ["from langchain_qdrant import RetrievalMode"],
+            "additional_requirements": []
+        }
+
+    def get_retrieval_logic(self) -> str:
+        """Returns the retrieval logic for dense vector search."""
         return dedent("""
-            # Dense retrieval is the default mode for most vector stores
-            pass
-        """).strip()
-
-    def get_retrieval_method_logic(self, vectorstore_component) -> str:
-        """Return the retrieval method implementation for dense search."""
-        return dedent("""
-            def retrieve(self, query: str, k: int = 5) -> list:
+            def retrieve(self, query: str, k: int = 4) -> List[Document]:
                 \"\"\"Retrieve documents using dense vector similarity search.\"\"\"
-                try:
-                    # Use similarity search for dense retrieval
-                    documents = self.vector_store.similarity_search(query, k=k)
-                    return documents
-                except Exception as e:
-                    print(f"Error during dense retrieval: {e}")
-                    return []
+                return self.vector_store.similarity_search(query, k=k)
             
-            def retrieve_with_score(self, query: str, k: int = 5) -> list:
-                \"\"\"Retrieve documents with similarity scores.\"\"\"
-                try:
-                    # Use similarity search with scores
-                    documents_with_scores = self.vector_store.similarity_search_with_score(query, k=k)
-                    return documents_with_scores
-                except Exception as e:
-                    print(f"Error during dense retrieval with scores: {e}")
-                    return []
-        """).strip()
-
-    def supports_vectorstore(self, vectorstore_id: str) -> bool:
-        """Dense retrieval supports all vectorstores."""
-        return True
-
-    def get_search_method_name(self, vectorstore_id: str) -> str:
-        """Get the appropriate search method name for dense retrieval."""
-        return "similarity_search" 
+            def retrieve_with_score(self, query: str, k: int = 4) -> List[tuple[Document, float]]:
+                \"\"\"Retrieve documents with similarity scores using dense vectors.\"\"\"
+                return self.vector_store.similarity_search_with_score(query, k=k)
+        """).strip() 

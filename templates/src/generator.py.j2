@@ -1,0 +1,60 @@
+from config import Config
+from src.rag_pipeline import RAGPipeline, RetrievedDocument
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
+from typing import List, Optional
+{% for imp in llm_component.get_imports() %}
+{{ imp }}
+{% endfor %}
+
+{{ llm_component.get_config_class() }}
+
+class GenerationResponse(BaseModel):
+    results: Optional[str] = None
+    retrieved_docs: Optional[List[RetrievedDocument]] = None
+    error: Optional[str] = None
+
+class Generator:
+    def __init__(self, rag_pipeline: RAGPipeline, config: GeneratorConfig = GeneratorConfig()):
+        """
+        Initialize the response generator with a RAG pipeline.
+        """
+        self.rag_pipeline = rag_pipeline
+        {{ llm_component.get_init_logic() | indent(8) }}
+        
+        # Define custom RAG prompt template
+        self.prompt = ChatPromptTemplate.from_template("""
+        You are a helpful assistant that provides information based on the given context.
+        
+        Context information is below:
+        ---------------------
+        {context}
+        ---------------------
+        
+        Given the context information and not prior knowledge, answer the following question:
+        {question}
+        
+        If the answer cannot be found in the context, just say "I don't have enough information to answer this question." Don't try to make up an answer.
+        """)
+
+    def generate_response(self, query: str, top_k: int = 5) -> GenerationResponse:
+        """
+        Generate a response from the LLM using retrieved documents.
+        """
+        retrieved_docs = self.rag_pipeline.query_documents(query, top_k)
+        if retrieved_docs.error:
+            return GenerationResponse(error=retrieved_docs.error)
+        
+        context = " ".join([doc.content for doc in retrieved_docs.results])
+        
+        # Use custom prompt
+        generation_message = self.prompt.invoke({
+            "context": context,
+            "question": query,
+        }).to_messages()
+        
+        response = self.llm.invoke(generation_message)
+        return GenerationResponse(
+            results=response.content,
+            retrieved_docs=retrieved_docs.results
+        ) 
