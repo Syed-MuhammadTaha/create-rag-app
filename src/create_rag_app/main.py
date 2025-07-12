@@ -102,7 +102,7 @@ class RAGAppGenerator:
     """Handles RAG application generation and module loading."""
     
     def __init__(self):
-        self.template_dir = Path(__file__).parent.parent.parent / "templates"
+        self.template_dir = Path(__file__).parent / "templates"
         self.env = self._create_jinja_env()
         
     def _create_jinja_env(self) -> Environment:

@@ -1,7 +1,7 @@
 [project]
 name = "create-rag-app"
-version = "0.1.0"
-description = ""
+version = "0.1.1"
+description = "A command-line tool to generate modern RAG applications with various components."
 authors = [
     {name = "Syed-MuhammadTaha",email = "simam.bscs22seecs@seecs.edu.pk"}
 ]
@@ -13,9 +13,15 @@ dependencies = [
     "questionary (>=2.1.0,<3.0.0)"
 ]
 
+[project.urls]
+"Homepage" = "https://github.com/Syed-MuhammadTaha/create-rag-app"
+"Repository" = "https://github.com/Syed-MuhammadTaha/create-rag-app"
+
 [tool.poetry]
 packages = [{include = "create_rag_app", from = "src"}]
 
+[tool.poetry.scripts]
+create-rag-app = "create_rag_app.cli:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
