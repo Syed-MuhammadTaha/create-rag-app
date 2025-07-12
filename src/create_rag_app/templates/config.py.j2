@@ -1,31 +1,60 @@
 import os
 from dotenv import load_dotenv
 
-# Load .env variables
 load_dotenv()
 
 class Config:
-    """Configuration class for the application."""
-
     # Embedding Configuration
     {% for env_var in embedding_component.get_env_vars() %}
-    {{ env_var }}
+    {% set var_parts = env_var.split('=') %}
+    {% set var_name = var_parts[0] %}
+    {% set var_value = var_parts[1] if var_parts|length > 1 else '""' %}
+    {% if 'API_KEY' in var_name or 'TOKEN' in var_name %}
+    {{ var_name }} = os.getenv("{{ var_name }}")
+    {% else %}
+    {{ var_name }} = os.getenv("{{ var_name }}", {{ var_value }})
+    {% endif %}
     {% endfor %}
 
     # Vector Store Configuration
     {% for env_var in vectorstore_component.get_env_vars() %}
-    {{ env_var }}
+    {% set var_parts = env_var.split('=') %}
+    {% set var_name = var_parts[0] %}
+    {% set var_value = var_parts[1] if var_parts|length > 1 else '""' %}
+    {% if 'API_KEY' in var_name or 'TOKEN' in var_name %}
+    {{ var_name }} = os.getenv("{{ var_name }}")
+    {% else %}
+    {{ var_name }} = os.getenv("{{ var_name }}", {{ var_value }})
+    {% endif %}
     {% endfor %}
 
     # Retriever Configuration
     {% for env_var in retriever_component.get_env_vars() %}
-    {{ env_var }}
+    {% set var_parts = env_var.split('=') %}
+    {% set var_name = var_parts[0] %}
+    {% set var_value = var_parts[1] if var_parts|length > 1 else '""' %}
+    {% if 'API_KEY' in var_name or 'TOKEN' in var_name %}
+    {{ var_name }} = os.getenv("{{ var_name }}")
+    {% else %}
+    {{ var_name }} = os.getenv("{{ var_name }}", {{ var_value }})
+    {% endif %}
     {% endfor %}
 
-    # File Configurations
-    INGEST_FOLDER = "data/"
-    
     # LLM Configuration
     {% for env_var in llm_component.get_env_vars() %}
-    {{ env_var }}
+    {% set var_parts = env_var.split('=') %}
+    {% set var_name = var_parts[0] %}
+    {% set var_value = var_parts[1] if var_parts|length > 1 else '""' %}
+    {% if 'API_KEY' in var_name or 'TOKEN' in var_name %}
+    {{ var_name }} = os.getenv("{{ var_name }}")
+    {% else %}
+    {% if 'TEMP' in var_name or 'MAX_NEW_TOKENS' in var_name %}
+    {{ var_name }} = {{ 'float' if 'TEMP' in var_name else 'int' }}(os.getenv("{{ var_name }}", {{ var_value }}))
+    {% else %}
+    {{ var_name }} = os.getenv("{{ var_name }}", {{ var_value }})
+    {% endif %}
+    {% endif %}
     {% endfor %}
+
+    # Ingest settings
+    INGEST_FOLDER = "data/"

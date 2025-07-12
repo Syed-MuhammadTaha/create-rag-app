@@ -1,8 +1,6 @@
 import os
 import re
 from langchain_community.document_loaders import DirectoryLoader, UnstructuredPDFLoader, UnstructuredWordDocumentLoader, UnstructuredExcelLoader
-from config import Config
-
 {# Renders the imports based on the selected chunking component. #}
 {%- for imp in chunking_component.get_imports() %}
 {{ imp }}
